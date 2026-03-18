@@ -1,0 +1,42 @@
+using Texty.AI;
+using Texty.Core.Interfaces;
+using Texty.Integrations;
+using Texty.OutlookAddin;
+using Texty.Runtime.Clipboard;
+using Texty.Runtime.Services;
+
+namespace Texty.Runtime.Bootstrap;
+
+public sealed record TextyRuntimeContext(
+    ISnippetRepository SnippetRepository,
+    IFolderRepository FolderRepository,
+    IVersionRepository VersionRepository,
+    ITrashRepository TrashRepository,
+    ISnippetRepository TeamSnippetRepository,
+    IFolderRepository TeamFolderRepository,
+    IVersionRepository TeamVersionRepository,
+    ITrashRepository TeamTrashRepository,
+    ISnippetSearchIndex SearchIndex,
+    ITriggerEvaluator TriggerEvaluator,
+    ITemplateRenderer TemplateRenderer,
+    IFormSchemaValidator FormSchemaValidator,
+    IInsertionPipeline InsertionPipeline,
+    IExternalDataResolverFactory ExternalResolverFactory,
+    IAiProvider DefaultAiProvider,
+    ITranslationProvider DefaultTranslationProvider,
+    AiProviderRegistry AiProviders,
+    TranslationProviderRegistry TranslationProviders,
+    IMacroEngine MacroEngine,
+    IPowerShellActionRunner PowerShellActionRunner,
+    IAuthContextProvider AuthContextProvider,
+    IRolePolicyService RolePolicyService,
+    ILicenseService LicenseService,
+    ISecretProtector SecretProtector,
+    ISyncOrchestrator SyncOrchestrator,
+    SnippetMaintenanceService SnippetMaintenanceService,
+    DocumentGeneratorService DocumentGeneratorService,
+    TextCorrectionService TextCorrectionService,
+    ClipboardHistoryService ClipboardHistoryService,
+    ProductivityStatsService ProductivityStatsService,
+    OutlookAddinBridge OutlookAddinBridge,
+    FileImportService ImportService);
