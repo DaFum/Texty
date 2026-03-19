@@ -2,16 +2,23 @@ namespace Texty.OutlookAddin;
 
 public sealed class GenderOMaticService
 {
-    public string DetermineSalutation(OutlookRecipientContext recipient)
+    public string DetermineSalutation(OutlookRecipientContext? recipient)
     {
-        if (!string.IsNullOrWhiteSpace(recipient.ExplicitGender))
+        if (recipient is null)
         {
-            return recipient.ExplicitGender.Equals("female", StringComparison.OrdinalIgnoreCase)
+            return "Guten Tag";
+        }
+
+        var explicitGender = recipient.ExplicitGender?.Trim();
+        if (!string.IsNullOrWhiteSpace(explicitGender))
+        {
+            return explicitGender.Equals("female", StringComparison.OrdinalIgnoreCase)
                 ? "Sehr geehrte Frau"
-                : recipient.ExplicitGender.Equals("male", StringComparison.OrdinalIgnoreCase)
+                : explicitGender.Equals("male", StringComparison.OrdinalIgnoreCase)
                     ? "Sehr geehrter Herr"
                     : "Guten Tag";
         }
+
         // Do not infer gender from DisplayName-only heuristics.
         return "Guten Tag";
     }

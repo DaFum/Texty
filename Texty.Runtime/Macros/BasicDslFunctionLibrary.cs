@@ -56,6 +56,49 @@ public sealed class BasicDslFunctionLibrary : IDslFunctionLibrary
                 }
 
                 return false;
+            case "replace":
+                if (args.Count >= 3)
+                {
+                    result = args[0].Replace(args[1], args[2], StringComparison.OrdinalIgnoreCase);
+                    return true;
+                }
+
+                return false;
+            case "regexreplace":
+                if (args.Count >= 3)
+                {
+                    result = Regex.Replace(args[0], args[1], args[2]);
+                    return true;
+                }
+
+                return false;
+            case "concat":
+                if (args.Count >= 1)
+                {
+                    result = string.Concat(args);
+                    return true;
+                }
+
+                return false;
+            case "adddays":
+                if (args.Count >= 2 &&
+                    DateTimeOffset.TryParse(args[0], out var baseDate) &&
+                    int.TryParse(args[1], out var days))
+                {
+                    result = baseDate.AddDays(days).ToString("yyyy-MM-dd");
+                    return true;
+                }
+
+                return false;
+            case "formatdate":
+                if (args.Count >= 2 &&
+                    DateTimeOffset.TryParse(args[0], out var dateValue))
+                {
+                    result = dateValue.ToString(args[1]);
+                    return true;
+                }
+
+                return false;
             default:
                 return false;
         }

@@ -4,6 +4,7 @@ using Texty.Integrations;
 using Texty.OutlookAddin;
 using Texty.Runtime.Clipboard;
 using Texty.Runtime.Services;
+using Texty.Runtime.Triggering;
 
 namespace Texty.Runtime.Bootstrap;
 
@@ -12,12 +13,10 @@ public sealed record TextyRuntimeContext(
     IFolderRepository FolderRepository,
     IVersionRepository VersionRepository,
     ITrashRepository TrashRepository,
-    ISnippetRepository TeamSnippetRepository,
-    IFolderRepository TeamFolderRepository,
-    IVersionRepository TeamVersionRepository,
-    ITrashRepository TeamTrashRepository,
     ISnippetSearchIndex SearchIndex,
+    ITriggerProvider HotkeyTriggerProvider,
     ITriggerEvaluator TriggerEvaluator,
+    HotkeyInsertionService HotkeyInsertionService,
     ITemplateRenderer TemplateRenderer,
     IFormSchemaValidator FormSchemaValidator,
     IInsertionPipeline InsertionPipeline,
@@ -27,7 +26,9 @@ public sealed record TextyRuntimeContext(
     AiProviderRegistry AiProviders,
     TranslationProviderRegistry TranslationProviders,
     IMacroEngine MacroEngine,
+    IMacroActionExecutor MacroActionExecutor,
     IPowerShellActionRunner PowerShellActionRunner,
+    IAuditLogger AuditLogger,
     IAuthContextProvider AuthContextProvider,
     IRolePolicyService RolePolicyService,
     ILicenseService LicenseService,
@@ -35,6 +36,7 @@ public sealed record TextyRuntimeContext(
     ISyncOrchestrator SyncOrchestrator,
     SnippetMaintenanceService SnippetMaintenanceService,
     SnippetVersioningService SnippetVersioningService,
+    ISnippetWorkflowService SnippetWorkflowService,
     DocumentGeneratorService DocumentGeneratorService,
     TextCorrectionService TextCorrectionService,
     ClipboardHistoryService ClipboardHistoryService,

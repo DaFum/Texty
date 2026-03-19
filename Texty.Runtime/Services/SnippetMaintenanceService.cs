@@ -6,10 +6,14 @@ namespace Texty.Runtime.Services;
 public sealed class SnippetMaintenanceService
 {
     private readonly ISnippetRepository _snippetRepository;
+    private readonly ISnippetSearchIndex? _searchIndex;
 
-    public SnippetMaintenanceService(ISnippetRepository snippetRepository)
+    public SnippetMaintenanceService(
+        ISnippetRepository snippetRepository,
+        ISnippetSearchIndex? searchIndex = null)
     {
         _snippetRepository = snippetRepository;
+        _searchIndex = searchIndex;
     }
 
     public async Task<int> BulkSetFontAsync(IEnumerable<Guid> snippetIds, string fontFamily, CancellationToken cancellationToken = default)
@@ -27,6 +31,16 @@ public sealed class SnippetMaintenanceService
                     UpdatedUtc = DateTimeOffset.UtcNow,
                 },
                 cancellationToken);
+            if (_searchIndex is not null)
+            {
+                await _searchIndex.UpsertAsync(
+                    snippet with
+                    {
+                        FontFamily = fontFamily,
+                        UpdatedUtc = DateTimeOffset.UtcNow,
+                    },
+                    cancellationToken);
+            }
             updatedCount++;
         }
 
@@ -50,6 +64,10 @@ public sealed class SnippetMaintenanceService
                          .Skip(1))
             {
                 await _snippetRepository.DeleteAsync(snippet.Id, cancellationToken);
+                if (_searchIndex is not null)
+                {
+                    await _searchIndex.RemoveAsync(snippet.Id, cancellationToken);
+                }
                 deleted++;
             }
         }

@@ -10,5 +10,7 @@ public interface ISyncOrchestrator
 public interface ISnippetSearchIndex
 {
     Task RebuildAsync(IEnumerable<Snippet> snippets, CancellationToken cancellationToken = default);
+    Task UpsertAsync(Snippet snippet, CancellationToken cancellationToken = default);
+    Task RemoveAsync(Guid snippetId, CancellationToken cancellationToken = default);
     IReadOnlyList<SnippetSearchResult> Search(SnippetSearchQuery query);
 }

@@ -3,7 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Texty.Core\Texty.Core.csproj" />
     <ProjectReference Include="..\Texty.Storage.Json\Texty.Storage.Json.csproj" />
-    <ProjectReference Include="..\Texty.Storage.SqlServer\Texty.Storage.SqlServer.csproj" />
     <ProjectReference Include="..\Texty.Integrations\Texty.Integrations.csproj" />
     <ProjectReference Include="..\Texty.AI\Texty.AI.csproj" />
     <ProjectReference Include="..\Texty.OutlookAddin\Texty.OutlookAddin.csproj" />

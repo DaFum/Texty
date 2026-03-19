@@ -27,6 +27,26 @@ public sealed class TriggerAndTemplateTests
     }
 
     [Fact]
+    public async Task TriggerEvaluator_ShouldMatchHotkeyRuleTargetProcessIgnoringExeSuffix()
+    {
+        var evaluator = new TriggerEvaluator();
+        var rule = new TriggerRule(
+            Guid.NewGuid(),
+            TriggerType.Hotkey,
+            "CTRL+SHIFT+K",
+            false,
+            TriggerScope.Any,
+            "winword",
+            true);
+
+        var signal = new TriggerSignal(TriggerType.Hotkey, "CTRL+SHIFT+K", "WINWORD.EXE", TriggerScope.Any);
+        var matches = await evaluator.EvaluateAsync([rule], signal);
+
+        Assert.Single(matches);
+        Assert.Equal(rule.Id, matches[0].Rule.Id);
+    }
+
+    [Fact]
     public async Task TemplateRenderer_ShouldReplacePlaceholders()
     {
         var renderer = new TemplateRenderer();
@@ -55,5 +75,40 @@ public sealed class TriggerAndTemplateTests
 
         Assert.Equal("Hello Alex", rendered.PlainText);
         Assert.Contains("Alex", rendered.HtmlText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TemplateRenderer_ShouldSupportStructuredTemplateValue()
+    {
+        var renderer = new TemplateRenderer();
+        var now = DateTimeOffset.UtcNow;
+        var snippet = new Snippet(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Table",
+            "txtable",
+            "Rows:\n{{table}}",
+            "<p>Rows:</p>{{table}}",
+            [],
+            [],
+            [],
+            new SnippetTemplate("<p>Rows:</p>{{table}}", [new TemplateField("table", "Table", FormFieldType.Table, true, null, null, null, null, null)]),
+            SnippetHighlightMode.None,
+            null,
+            false,
+            now,
+            now,
+            "test");
+
+        var rendered = await renderer.RenderAsync(
+            snippet,
+            new RenderContext(new Dictionary<string, object?>
+            {
+                ["table"] = new TemplateValue("A | B", "<table><tr><td>A</td><td>B</td></tr></table>"),
+            }));
+
+        Assert.Contains("A | B", rendered.PlainText, StringComparison.Ordinal);
+        Assert.Contains("<table>", rendered.HtmlText, StringComparison.Ordinal);
+        Assert.DoesNotContain("&lt;table&gt;", rendered.HtmlText, StringComparison.Ordinal);
     }
 }

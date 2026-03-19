@@ -2,12 +2,15 @@ namespace Texty.Core.Models;
 
 public sealed record MacroExecutionContext(
     IDictionary<string, string> Variables,
-    InsertionContext InsertionContext);
+    InsertionContext InsertionContext,
+    MacroActionPolicy? ActionPolicy = null);
 
 public sealed record MacroExecutionResult(
+    bool Success,
     string Output,
     IReadOnlyDictionary<string, string> Variables,
-    IReadOnlyList<string> AuditTrail);
+    IReadOnlyList<string> AuditTrail,
+    IReadOnlyList<string>? Errors = null);
 
 public sealed record PowerShellExecutionPolicy(
     bool IsTrusted,

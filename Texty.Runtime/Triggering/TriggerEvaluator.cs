@@ -18,8 +18,7 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
                 continue;
             }
 
-            if (!string.IsNullOrWhiteSpace(rule.TargetProcess) &&
-                !string.Equals(rule.TargetProcess, signal.ProcessName, StringComparison.OrdinalIgnoreCase))
+            if (!MatchesTargetProcess(rule.TargetProcess, signal.ProcessName))
             {
                 continue;
             }
@@ -70,5 +69,31 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
             TriggerType.Clipboard => input.Contains(rule.Pattern, comparison),
             _ => false,
         };
+    }
+
+    private static bool MatchesTargetProcess(string? expectedProcess, string? actualProcess)
+    {
+        if (string.IsNullOrWhiteSpace(expectedProcess))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(actualProcess))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            NormalizeProcessName(expectedProcess),
+            NormalizeProcessName(actualProcess),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeProcessName(string processName)
+    {
+        var value = processName.Trim();
+        return value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? value[..^4]
+            : value;
     }
 }

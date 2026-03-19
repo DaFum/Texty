@@ -6,6 +6,7 @@ using Texty.Integrations;
 using Texty.Integrations.Resolvers;
 using Texty.OutlookAddin;
 using Texty.Runtime.Clipboard;
+using Texty.Runtime.Audit;
 using Texty.Runtime.Insertion;
 using Texty.Runtime.Macros;
 using Texty.Runtime.Security;
@@ -15,8 +16,6 @@ using Texty.Runtime.Templating;
 using Texty.Runtime.Triggering;
 using Texty.Storage.Json;
 using Texty.Storage.Json.Repositories;
-using Texty.Storage.SqlServer;
-using Texty.Storage.SqlServer.Repositories;
 
 namespace Texty.Runtime.Bootstrap;
 
@@ -39,32 +38,47 @@ public static class TextyRuntimeBootstrap
         IVersionRepository versionRepository = new JsonVersionRepository(jsonOptions);
         ITrashRepository trashRepository = new JsonTrashRepository(jsonOptions);
         ISnippetSearchIndex searchIndex = new JsonSnippetSearchIndex();
-
-        var sqlOptions = new SqlServerStorageOptions { UseInMemoryFallback = true };
-        var sqlState = new SqlServerStorageState();
-        ISnippetRepository teamSnippetRepository = new SqlServerSnippetRepository(sqlOptions, sqlState);
-        IFolderRepository teamFolderRepository = new SqlServerFolderRepository(sqlState);
-        IVersionRepository teamVersionRepository = new SqlServerVersionRepository(sqlState);
-        ITrashRepository teamTrashRepository = new SqlServerTrashRepository(sqlState);
+        IAuditLogger auditLogger = new JsonlAuditLogger(root);
 
         await EnsureDefaultDataAsync(snippetRepository, folderRepository, cancellationToken);
         await searchIndex.RebuildAsync(await snippetRepository.GetAllAsync(cancellationToken), cancellationToken);
 
         var triggerEvaluator = new TriggerEvaluator();
+        var foregroundProcessProvider = new WindowsForegroundProcessProvider();
+        IClipboardGateway clipboardGateway = OperatingSystem.IsWindows()
+            ? new WindowsClipboardGateway()
+            : new InMemoryClipboardGateway();
+        IKeystrokeEmitter keyEmitter = OperatingSystem.IsWindows()
+            ? new WindowsKeystrokeEmitter()
+            : new NoOpKeystrokeEmitter();
+        ITriggerProvider triggerProvider;
+        if (OperatingSystem.IsWindows())
+        {
+            var hotkeyProvider = new WindowsKeyboardHookTriggerProvider(foregroundProcessProvider);
+            var clipboardProvider = new ClipboardTriggerProvider(clipboardGateway, foregroundProcessProvider);
+            triggerProvider = new CompositeTriggerProvider("WindowsCompositeTriggerProvider", [hotkeyProvider, clipboardProvider]);
+        }
+        else
+        {
+            triggerProvider = new NoOpTriggerProvider("NoOpTriggerProvider");
+        }
+
         var templateRenderer = new TemplateRenderer();
         var formSchemaValidator = new FormSchemaValidator();
-        var clipboardGateway = new InMemoryClipboardGateway();
-        var keyEmitter = new NoOpKeystrokeEmitter();
-        var insertionPipeline = new ClipboardInsertionPipeline(clipboardGateway, keyEmitter);
+        var insertionPipeline = new ClipboardInsertionPipeline(
+            clipboardGateway,
+            keyEmitter,
+            foregroundProcessProvider,
+            auditLogger);
 
         var resolvers = new IExternalDataResolver[]
         {
-            new EnvResolver(),
-            new CsvResolver(),
-            new XmlResolver(),
-            new SqlResolver(),
-            new AdResolver(),
-            new ExcelResolver(),
+            new EnvResolver(auditLogger),
+            new CsvResolver(auditLogger),
+            new XmlResolver(auditLogger),
+            new SqlResolver(auditLogger),
+            new AdResolver(auditLogger),
+            new ExcelResolver(auditLogger),
         };
         var resolverFactory = new CompositeExternalDataResolverFactory(resolvers);
 
@@ -75,12 +89,12 @@ public static class TextyRuntimeBootstrap
         IAiProvider langdock = new LangdockProvider(httpClient);
         var aiRegistry = new AiProviderRegistry([openAi, openRouter, groq, langdock]);
 
-        ITranslationProvider deepL = new DeepLTranslationProvider(httpClient);
         ITranslationProvider openAiTranslation = new OpenAiTranslationProvider(openAi);
-        var translationRegistry = new TranslationProviderRegistry([deepL, openAiTranslation]);
+        var translationRegistry = new TranslationProviderRegistry([openAiTranslation]);
 
-        var macroEngine = new MacroEngine(new BasicDslFunctionLibrary());
-        var powerShellActionRunner = new PowerShellActionRunner();
+        var powerShellActionRunner = new PowerShellActionRunner(auditLogger);
+        var macroActionExecutor = new MacroActionExecutor(powerShellActionRunner, auditLogger);
+        var macroEngine = new MacroEngine(new BasicDslFunctionLibrary(), macroActionExecutor);
         var authProvider = new LocalAuthContextProvider();
         var rolePolicy = new RolePolicyService(
             new Dictionary<string, RoleName>(StringComparer.OrdinalIgnoreCase)
@@ -91,13 +105,23 @@ public static class TextyRuntimeBootstrap
         var secretProtector = new DpapiSecretProtector();
         var sync = new FolderSyncOrchestrator();
 
-        var maintenance = new SnippetMaintenanceService(snippetRepository);
+        var maintenance = new SnippetMaintenanceService(snippetRepository, searchIndex);
         var snippetVersioning = new SnippetVersioningService(snippetRepository, versionRepository);
+        ISnippetWorkflowService snippetWorkflow = new SnippetWorkflowService(
+            snippetRepository,
+            searchIndex,
+            snippetVersioning);
         var docGenerator = new DocumentGeneratorService();
         var textCorrection = new TextCorrectionService();
         var clipboardHistory = new ClipboardHistoryService();
         var productivityStats = new ProductivityStatsService();
-        var importService = new FileImportService(snippetRepository, DefaultFolderId);
+        var hotkeyInsertionService = new HotkeyInsertionService(
+            snippetRepository,
+            triggerProvider,
+            triggerEvaluator,
+            insertionPipeline,
+            productivityStats);
+        var importService = new FileImportService(snippetRepository, DefaultFolderId, jsonOptions.AssetsDirectory, auditLogger);
 
         var outlookBridge = new OutlookAddinBridge(new GenderOMaticService());
 
@@ -106,22 +130,22 @@ public static class TextyRuntimeBootstrap
             folderRepository,
             versionRepository,
             trashRepository,
-            teamSnippetRepository,
-            teamFolderRepository,
-            teamVersionRepository,
-            teamTrashRepository,
             searchIndex,
+            triggerProvider,
             triggerEvaluator,
+            hotkeyInsertionService,
             templateRenderer,
             formSchemaValidator,
             insertionPipeline,
             resolverFactory,
             openAi,
-            deepL,
+            openAiTranslation,
             aiRegistry,
             translationRegistry,
             macroEngine,
+            macroActionExecutor,
             powerShellActionRunner,
+            auditLogger,
             authProvider,
             rolePolicy,
             licenseService,
@@ -129,6 +153,7 @@ public static class TextyRuntimeBootstrap
             sync,
             maintenance,
             snippetVersioning,
+            snippetWorkflow,
             docGenerator,
             textCorrection,
             clipboardHistory,

@@ -5,18 +5,67 @@ namespace Texty.Storage.Json.Repositories;
 
 public sealed class JsonSnippetSearchIndex : ISnippetSearchIndex
 {
-    private Snippet[] _index = [];
+    private readonly object _sync = new();
+    private Dictionary<Guid, Snippet> _index = new();
 
     public Task RebuildAsync(IEnumerable<Snippet> snippets, CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken;
-        _index = snippets.Where(s => !s.Deleted).ToArray();
+        var rebuilt = new Dictionary<Guid, Snippet>();
+        foreach (var snippet in snippets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!snippet.Deleted)
+            {
+                rebuilt[snippet.Id] = snippet;
+            }
+        }
+
+        lock (_sync)
+        {
+            _index = rebuilt;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task UpsertAsync(Snippet snippet, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_sync)
+        {
+            if (snippet.Deleted)
+            {
+                _index.Remove(snippet.Id);
+            }
+            else
+            {
+                _index[snippet.Id] = snippet;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(Guid snippetId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_sync)
+        {
+            _index.Remove(snippetId);
+        }
+
         return Task.CompletedTask;
     }
 
     public IReadOnlyList<SnippetSearchResult> Search(SnippetSearchQuery query)
     {
-        var snapshot = _index;
+        IReadOnlyCollection<Snippet> snapshot;
+        lock (_sync)
+        {
+            snapshot = _index.Values.ToArray();
+        }
+
         var source = snapshot.AsEnumerable();
 
         if (!query.IncludeHidden)

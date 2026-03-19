@@ -55,6 +55,7 @@ if ($KillRunningTexty) {
 }
 
 # Intentionally override publish-profile defaults (for example win-x64.pubxml) for unpackaged WinUI reliability.
+# PublishReadyToRun stays disabled here to keep portable inner-loop builds fast and predictable across RIDs.
 & $dotnet publish $projectPath `
     -c $Configuration `
     -r $RuntimeIdentifier `
