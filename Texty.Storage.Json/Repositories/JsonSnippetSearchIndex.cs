@@ -5,18 +5,19 @@ namespace Texty.Storage.Json.Repositories;
 
 public sealed class JsonSnippetSearchIndex : ISnippetSearchIndex
 {
-    private readonly List<Snippet> _index = [];
+    private Snippet[] _index = [];
 
     public Task RebuildAsync(IEnumerable<Snippet> snippets, CancellationToken cancellationToken = default)
     {
-        _index.Clear();
-        _index.AddRange(snippets.Where(s => !s.Deleted));
+        _ = cancellationToken;
+        _index = snippets.Where(s => !s.Deleted).ToArray();
         return Task.CompletedTask;
     }
 
     public IReadOnlyList<SnippetSearchResult> Search(SnippetSearchQuery query)
     {
-        var source = _index.AsEnumerable();
+        var snapshot = _index;
+        var source = snapshot.AsEnumerable();
 
         if (!query.IncludeHidden)
         {

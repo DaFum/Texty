@@ -8,10 +8,21 @@ public sealed class MainPage : Page
 {
     private readonly MainViewModel _viewModel = new();
     private WebView2? _htmlPreview;
-    private TextBox? _htmlFallbackPreview;
+    private readonly TextBox _htmlFallbackPreview;
+    private readonly Grid _previewHost;
 
     public MainPage()
     {
+        _htmlFallbackPreview = new TextBox
+        {
+            Header = "HTML Vorschau (Fallback)",
+            AcceptsReturn = true,
+            IsReadOnly = true,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(_htmlFallbackPreview, ScrollBarVisibility.Auto);
+        _previewHost = new Grid();
+
         DataContext = _viewModel;
         Content = BuildLayout();
         Loaded += OnLoaded;
@@ -208,20 +219,16 @@ public sealed class MainPage : Page
             {
                 DefaultBackgroundColor = Microsoft.UI.Colors.Transparent,
             };
-            return _htmlPreview;
+            _previewHost.Children.Clear();
+            _previewHost.Children.Add(_htmlPreview);
+            return _previewHost;
         }
         catch (Exception ex)
         {
-            _viewModel.StatusText = $"WebView2 Fallback aktiv: {ex.GetType().Name}";
-            _htmlFallbackPreview = new TextBox
-            {
-                Header = "HTML Vorschau (Fallback)",
-                AcceptsReturn = true,
-                IsReadOnly = true,
-                TextWrapping = TextWrapping.Wrap,
-            };
-            ScrollViewer.SetVerticalScrollBarVisibility(_htmlFallbackPreview, ScrollBarVisibility.Auto);
-            return _htmlFallbackPreview;
+            ActivateFallbackPreview(
+                $"WebView2 Fallback aktiv: {ex.GetType().Name}",
+                BuildSafePreviewHtml(_viewModel.EditorPlainText, _viewModel.EditorHtmlText));
+            return _previewHost;
         }
     }
 
@@ -248,9 +255,7 @@ public sealed class MainPage : Page
 
     private void RefreshPreview()
     {
-        var html = string.IsNullOrWhiteSpace(_viewModel.EditorHtmlText)
-            ? $"<html><body><pre>{System.Net.WebUtility.HtmlEncode(_viewModel.EditorPlainText)}</pre></body></html>"
-            : _viewModel.EditorHtmlText;
+        var html = BuildSafePreviewHtml(_viewModel.EditorPlainText, _viewModel.EditorHtmlText);
 
         if (_htmlPreview is not null)
         {
@@ -261,14 +266,25 @@ public sealed class MainPage : Page
             }
             catch
             {
-                _htmlPreview = null;
-                _viewModel.StatusText = "WebView2 Vorschau nicht verfuegbar, Fallback aktiv.";
+                ActivateFallbackPreview("WebView2 Vorschau nicht verfuegbar, Fallback aktiv.", html);
             }
         }
 
-        if (_htmlFallbackPreview is not null)
-        {
-            _htmlFallbackPreview.Text = html;
-        }
+        _htmlFallbackPreview.Text = html;
+    }
+
+    private static string BuildSafePreviewHtml(string plainText, string? htmlText)
+    {
+        var source = string.IsNullOrWhiteSpace(htmlText) ? plainText : htmlText;
+        return $"<html><body><pre>{System.Net.WebUtility.HtmlEncode(source)}</pre></body></html>";
+    }
+
+    private void ActivateFallbackPreview(string status, string html)
+    {
+        _htmlPreview = null;
+        _viewModel.StatusText = status;
+        _htmlFallbackPreview.Text = html;
+        _previewHost.Children.Clear();
+        _previewHost.Children.Add(_htmlFallbackPreview);
     }
 }

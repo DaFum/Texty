@@ -37,13 +37,17 @@ public sealed class SnippetMaintenanceService
     {
         var snippets = await _snippetRepository.GetAllAsync(cancellationToken);
         var duplicateGroups = snippets
-            .GroupBy(s => $"{s.Title}|{s.Shortcut}|{s.PlainText}|{s.HtmlText}", StringComparer.Ordinal)
+            .GroupBy(s => (s.Title, s.Shortcut, s.PlainText, s.HtmlText))
             .Where(g => g.Count() > 1);
 
         var deleted = 0;
         foreach (var group in duplicateGroups)
         {
-            foreach (var snippet in group.Skip(1))
+            foreach (var snippet in group
+                         .OrderByDescending(s => s.UpdatedUtc)
+                         .ThenByDescending(s => s.CreatedUtc)
+                         .ThenBy(s => s.Id)
+                         .Skip(1))
             {
                 await _snippetRepository.DeleteAsync(snippet.Id, cancellationToken);
                 deleted++;

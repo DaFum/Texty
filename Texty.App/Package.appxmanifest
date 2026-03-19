@@ -9,14 +9,14 @@
 
   <Identity
     Name="786b1c28-ecd9-426c-a527-cafd25c3bfe6"
-    Publisher="CN=User Name"
+    Publisher="CN=Texty"
     Version="1.0.0.0" />
 
-  <mp:PhoneIdentity PhoneProductId="786b1c28-ecd9-426c-a527-cafd25c3bfe6" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="786b1c28-ecd9-426c-a527-cafd25c3bfe6" PhonePublisherId="786b1c28-ecd9-426c-a527-cafd25c3bfe6"/>
 
   <Properties>
     <DisplayName>Texty.App</DisplayName>
-    <PublisherDisplayName>User Name</PublisherDisplayName>
+    <PublisherDisplayName>Texty</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 

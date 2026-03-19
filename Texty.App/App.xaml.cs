@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Texty.App.Pages;
 using Microsoft.UI.Xaml.Media;
 
@@ -34,12 +35,19 @@ namespace Texty.App
             }
             catch (Exception ex)
             {
-                window.Content = BuildStartupErrorView(ex);
+                Trace.TraceError(ex.ToString());
+#if DEBUG
+                const bool showDiagnostics = true;
+#else
+                const bool showDiagnostics = false;
+#endif
+                window.Content = BuildStartupErrorView(ex, showDiagnostics);
             }
 
             window.Activate();
         }
-        private static UIElement BuildStartupErrorView(Exception ex)
+
+        private static UIElement BuildStartupErrorView(Exception ex, bool showDiagnostics)
         {
             var panel = new StackPanel
             {
@@ -57,14 +65,18 @@ namespace Texty.App
 
             panel.Children.Add(new TextBlock
             {
-                Text = $"{ex.GetType().Name}: {ex.Message}",
+                Text = showDiagnostics
+                    ? $"{ex.GetType().Name}: {ex.Message}"
+                    : "Beim Start ist ein Fehler aufgetreten.",
                 TextWrapping = TextWrapping.Wrap,
             });
 
             panel.Children.Add(new TextBox
             {
                 Header = "Details",
-                Text = ex.ToString(),
+                Text = showDiagnostics
+                    ? ex.ToString()
+                    : "Beim Start ist ein Fehler aufgetreten. Bitte Logs prüfen oder Support kontaktieren.",
                 IsReadOnly = true,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,

@@ -9,4 +9,8 @@ public sealed record MacroExecutionResult(
     IReadOnlyDictionary<string, string> Variables,
     IReadOnlyList<string> AuditTrail);
 
+public sealed record PowerShellExecutionPolicy(
+    bool IsTrusted,
+    string? PolicySource = null);
+
 public sealed record PowerShellExecutionResult(bool Success, string Output, string Error);

@@ -14,5 +14,8 @@ public interface IMacroEngine
 
 public interface IPowerShellActionRunner
 {
-    Task<PowerShellExecutionResult> ExecuteAsync(string script, bool trusted, CancellationToken cancellationToken = default);
+    Task<PowerShellExecutionResult> ExecuteAsync(
+        string script,
+        PowerShellExecutionPolicy policy,
+        CancellationToken cancellationToken = default);
 }

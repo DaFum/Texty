@@ -25,19 +25,20 @@ public sealed class FileImportService : IImportService
 
         var extension = Path.GetExtension(sourcePath);
         var normalizedFormat = format.Trim().ToLowerInvariant();
-        if (normalizedFormat is not ("text" or "image" or "outlook" or "textexpander"))
+        if (normalizedFormat is not ("text" or "html"))
         {
             warnings.Add($"Unsupported format '{format}'.");
             return new ImportResult(0, warnings);
         }
 
         var now = DateTimeOffset.UtcNow;
+        var content = await File.ReadAllTextAsync(sourcePath, cancellationToken);
         var snippet = new Snippet(
             Guid.NewGuid(),
             _defaultFolderId,
             Path.GetFileNameWithoutExtension(sourcePath),
             string.Empty,
-            await File.ReadAllTextAsync(sourcePath, cancellationToken),
+            content,
             string.Empty,
             [],
             [],
@@ -50,9 +51,9 @@ public sealed class FileImportService : IImportService
             now,
             "import");
 
-        if (extension.Equals(".html", StringComparison.OrdinalIgnoreCase))
+        if (normalizedFormat == "html" || extension.Equals(".html", StringComparison.OrdinalIgnoreCase))
         {
-            snippet = snippet with { HtmlText = snippet.PlainText };
+            snippet = snippet with { HtmlText = content };
         }
 
         await _snippetRepository.SaveAsync(snippet, cancellationToken);

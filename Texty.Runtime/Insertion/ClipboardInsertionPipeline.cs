@@ -32,6 +32,10 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
             await _keystrokeEmitter.SendPasteAsync(cancellationToken);
             results.Add(new InsertionStepResult(InsertionStep.Insert, true, "Paste command emitted."));
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             results.Add(new InsertionStepResult(InsertionStep.Insert, false, ex.Message));
@@ -43,16 +47,32 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
                 await _clipboardGateway.RestoreAsync(snapshot, cancellationToken);
                 results.Add(new InsertionStepResult(InsertionStep.Restore, true, "Clipboard restored."));
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 results.Add(new InsertionStepResult(InsertionStep.Restore, false, ex.Message));
             }
         }
 
-        if (payload.PostActions.Count > 0)
+        var insertSucceeded = results.Any(r => r.Step == InsertionStep.Insert && r.Success);
+        if (insertSucceeded && payload.PostActions.Count > 0)
         {
-            await _keystrokeEmitter.SendSequenceAsync(payload.PostActions, cancellationToken);
-            results.Add(new InsertionStepResult(InsertionStep.PostProcess, true, "Post-actions executed."));
+            try
+            {
+                await _keystrokeEmitter.SendSequenceAsync(payload.PostActions, cancellationToken);
+                results.Add(new InsertionStepResult(InsertionStep.PostProcess, true, "Post-actions executed."));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                results.Add(new InsertionStepResult(InsertionStep.PostProcess, false, ex.Message));
+            }
         }
 
         return results;

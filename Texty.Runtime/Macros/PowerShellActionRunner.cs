@@ -7,11 +7,18 @@ namespace Texty.Runtime.Macros;
 
 public sealed class PowerShellActionRunner : IPowerShellActionRunner
 {
-    public async Task<PowerShellExecutionResult> ExecuteAsync(string script, bool trusted, CancellationToken cancellationToken = default)
+    public async Task<PowerShellExecutionResult> ExecuteAsync(
+        string script,
+        PowerShellExecutionPolicy policy,
+        CancellationToken cancellationToken = default)
     {
-        if (!trusted)
+        if (!policy.IsTrusted)
         {
-            return new PowerShellExecutionResult(false, string.Empty, "PowerShell execution is not trusted.");
+            var source = string.IsNullOrWhiteSpace(policy.PolicySource) ? "unknown" : policy.PolicySource;
+            return new PowerShellExecutionResult(
+                false,
+                string.Empty,
+                $"PowerShell execution is not trusted (policy source: {source}).");
         }
 
         var psi = new ProcessStartInfo

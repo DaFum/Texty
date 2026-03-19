@@ -15,7 +15,21 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 $projectPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\Texty.App\Texty.App.csproj"))
 $dotnetUser = Join-Path $env:USERPROFILE ".dotnet\dotnet.exe"
-$dotnet = if (Test-Path $dotnetUser) { $dotnetUser } else { "dotnet" }
+$dotnetProgramFiles = if ($env:ProgramFiles) { Join-Path $env:ProgramFiles "dotnet\dotnet.exe" } else { $null }
+$dotnetProgramFilesX86 = if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} "dotnet\dotnet.exe" } else { $null }
+$dotnet = @($dotnetUser, $dotnetProgramFiles, $dotnetProgramFilesX86) |
+    Where-Object { $_ -and (Test-Path $_) } |
+    Select-Object -First 1
+
+if ([string]::IsNullOrWhiteSpace($dotnet)) {
+    $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($null -ne $dotnetCommand) {
+        $dotnet = $dotnetCommand.Source
+    }
+    else {
+        throw "dotnet executable not found. Install .NET SDK and retry."
+    }
+}
 $rid = $RuntimeIdentifier.ToLowerInvariant()
 
 $platform = switch ($rid) {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
 
@@ -21,11 +22,22 @@ public sealed class JsonTrashRepository : ITrashRepository
 
         foreach (var file in files)
         {
-            await using var stream = File.OpenRead(file);
-            var item = await JsonSerializer.DeserializeAsync<TrashEntry>(stream, JsonSerializerDefaults.Options, cancellationToken);
-            if (item is not null)
+            try
             {
-                list.Add(item);
+                await using var stream = File.OpenRead(file);
+                var item = await JsonSerializer.DeserializeAsync<TrashEntry>(stream, JsonSerializerDefaults.Options, cancellationToken);
+                if (item is not null)
+                {
+                    list.Add(item);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Skipping corrupted trash entry '{file}': {ex.Message}");
             }
         }
 
@@ -37,8 +49,28 @@ public sealed class JsonTrashRepository : ITrashRepository
     public async Task MoveToTrashAsync(TrashEntry entry, CancellationToken cancellationToken = default)
     {
         var path = Path.Combine(_options.TrashDirectory, $"{entry.Id:N}.json");
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, entry, JsonSerializerDefaults.Options, cancellationToken);
+        var tempPath = path + ".tmp";
+
+        try
+        {
+            await using (var stream = File.Create(tempPath))
+            {
+                await JsonSerializer.SerializeAsync(stream, entry, JsonSerializerDefaults.Options, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
+
+            File.Move(tempPath, path, true);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"Failed to persist trash entry '{path}': {ex}");
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+
+            throw;
+        }
     }
 
     public Task RemoveAsync(Guid trashEntryId, CancellationToken cancellationToken = default)
