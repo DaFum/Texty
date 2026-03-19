@@ -34,6 +34,7 @@ public sealed record TextyRuntimeContext(
     ISecretProtector SecretProtector,
     ISyncOrchestrator SyncOrchestrator,
     SnippetMaintenanceService SnippetMaintenanceService,
+    SnippetVersioningService SnippetVersioningService,
     DocumentGeneratorService DocumentGeneratorService,
     TextCorrectionService TextCorrectionService,
     ClipboardHistoryService ClipboardHistoryService,

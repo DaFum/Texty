@@ -39,7 +39,7 @@ $platform = switch ($rid) {
     "win10-x86" { "x86" }
     "win-arm64" { "ARM64" }
     "win10-arm64" { "ARM64" }
-    default { throw "Unsupported RuntimeIdentifier '$RuntimeIdentifier'. Supported: win-x86, win-x64, win-arm64." }
+    default { throw "Unsupported RuntimeIdentifier '$RuntimeIdentifier'. Supported: win-x86, win-x64, win-arm64, win10-x86, win10-x64, win10-arm64." }
 }
 
 Write-Host "Publishing portable build..."
@@ -54,6 +54,7 @@ if ($KillRunningTexty) {
     Start-Sleep -Milliseconds 500
 }
 
+# Intentionally override publish-profile defaults (for example win-x64.pubxml) for unpackaged WinUI reliability.
 & $dotnet publish $projectPath `
     -c $Configuration `
     -r $RuntimeIdentifier `

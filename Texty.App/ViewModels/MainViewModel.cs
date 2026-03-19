@@ -10,6 +10,7 @@ namespace Texty.App.ViewModels;
 public partial class MainViewModel : BaseViewModel
 {
     private TextyRuntimeContext? _runtime;
+    private CancellationTokenSource? _loadSnippetsCts;
 
     public MainViewModel()
     {
@@ -106,16 +107,7 @@ public partial class MainViewModel : BaseViewModel
             LastEditor = Environment.UserName,
         };
 
-        await _runtime.SnippetRepository.SaveAsync(updated);
-        await _runtime.VersionRepository.AddVersionAsync(
-            new VersionEntry(
-                Guid.NewGuid(),
-                updated.Id,
-                (await _runtime.VersionRepository.GetVersionsAsync(updated.Id)).Count + 1,
-                updated.PlainText,
-                updated.HtmlText,
-                DateTimeOffset.UtcNow,
-                Environment.UserName));
+        await _runtime.SnippetVersioningService.SaveAndVersionAsync(updated);
 
         StatusText = "Baustein gespeichert.";
         await LoadSnippetsAsync();
@@ -149,7 +141,6 @@ public partial class MainViewModel : BaseViewModel
             new InsertionContext(null, false, true, null));
 
         var ok = results.All(r => r.Success);
-        _runtime.ProductivityStatsService.TrackInsertion();
         StatusText = ok ? "Einfuegen simuliert." : $"Einfuegen mit Fehlern ({results.Count(r => !r.Success)}).";
     }
 
@@ -193,7 +184,9 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedFolderChanged(FolderItemModel? value)
     {
-        _ = LoadSnippetsSafelyAsync();
+        _ = value;
+        var cancellationToken = ResetLoadSnippetsCancellation();
+        _ = LoadSnippetsSafelyAsync(cancellationToken);
     }
 
     partial void OnSelectedSnippetChanged(SnippetItemModel? value)
@@ -229,13 +222,14 @@ public partial class MainViewModel : BaseViewModel
         SelectedFolder ??= Folders.FirstOrDefault();
     }
 
-    private async Task LoadSnippetsAsync()
+    private async Task LoadSnippetsAsync(CancellationToken cancellationToken = default)
     {
         if (_runtime is null)
         {
             return;
         }
 
+        var requestedFolderId = SelectedFolder?.Id;
         var query = new SnippetSearchQuery(
             string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm,
             SelectedFolder?.Id,
@@ -243,22 +237,37 @@ public partial class MainViewModel : BaseViewModel
             null,
             500,
             false);
-        var found = await _runtime.SnippetRepository.SearchAsync(query);
+        var found = await _runtime.SnippetRepository.SearchAsync(query, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        VisibleSnippets.Clear();
-        foreach (var item in found)
+        if (requestedFolderId != SelectedFolder?.Id)
         {
-            VisibleSnippets.Add(
-                new SnippetItemModel(
-                    item.Snippet.Id,
-                    item.Snippet.FolderId,
-                    item.Snippet.Title,
-                    item.Snippet.Shortcut,
-                    $"#{item.Snippet.Shortcut}",
-                    item.Snippet));
+            return;
         }
 
-        if (VisibleSnippets.Count > 0 && (SelectedSnippet is null || VisibleSnippets.All(x => x.Id != SelectedSnippet.Id)))
+        var rebuilt = found
+            .Select(item => new SnippetItemModel(
+                item.Snippet.Id,
+                item.Snippet.FolderId,
+                item.Snippet.Title,
+                item.Snippet.Shortcut,
+                $"#{item.Snippet.Shortcut}",
+                item.Snippet))
+            .ToList();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        VisibleSnippets.Clear();
+        foreach (var item in rebuilt)
+        {
+            VisibleSnippets.Add(item);
+        }
+
+        var selectedId = SelectedSnippet?.Id;
+        if (selectedId is not null)
+        {
+            SelectedSnippet = VisibleSnippets.FirstOrDefault(x => x.Id == selectedId);
+        }
+        else if (VisibleSnippets.Count > 0)
         {
             SelectedSnippet = VisibleSnippets[0];
         }
@@ -267,16 +276,42 @@ public partial class MainViewModel : BaseViewModel
         StatusText = $"Bausteine: {VisibleSnippets.Count} | Insertions: {stats.Insertions}";
     }
 
-    private async Task LoadSnippetsSafelyAsync()
+    private async Task LoadSnippetsSafelyAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            await LoadSnippetsAsync();
+            await LoadSnippetsAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Intentionally ignored: a newer folder-selection request superseded this one.
         }
         catch (Exception ex)
         {
-            StatusText = $"Fehler beim Laden der Bausteine: {ex.Message}";
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                StatusText = $"Fehler beim Laden der Bausteine: {ex.Message}";
+            }
         }
+    }
+
+    private CancellationToken ResetLoadSnippetsCancellation()
+    {
+        var next = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _loadSnippetsCts, next);
+        if (previous is not null)
+        {
+            try
+            {
+                previous.Cancel();
+            }
+            finally
+            {
+                previous.Dispose();
+            }
+        }
+
+        return next.Token;
     }
 
     private static Windows.UI.Color ParseColor(string? colorHex)

@@ -92,6 +92,7 @@ public static class TextyRuntimeBootstrap
         var sync = new FolderSyncOrchestrator();
 
         var maintenance = new SnippetMaintenanceService(snippetRepository);
+        var snippetVersioning = new SnippetVersioningService(snippetRepository, versionRepository);
         var docGenerator = new DocumentGeneratorService();
         var textCorrection = new TextCorrectionService();
         var clipboardHistory = new ClipboardHistoryService();
@@ -127,6 +128,7 @@ public static class TextyRuntimeBootstrap
             secretProtector,
             sync,
             maintenance,
+            snippetVersioning,
             docGenerator,
             textCorrection,
             clipboardHistory,
