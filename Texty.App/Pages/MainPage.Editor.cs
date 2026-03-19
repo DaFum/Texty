@@ -11,6 +11,8 @@ namespace Texty.App.Pages;
 
 public sealed partial class MainPage
 {
+    private const long MaxInlineImageBytes = 10 * 1024 * 1024;
+
     private async void OnInsertClicked(object sender, RoutedEventArgs e)
     {
         _ = sender;
@@ -169,6 +171,13 @@ public sealed partial class MainPage
             return;
         }
 
+        var fileInfo = new FileInfo(imagePath);
+        if (fileInfo.Length > MaxInlineImageBytes)
+        {
+            _viewModel.StatusText = $"Bild zu gross (max. {MaxInlineImageBytes / (1024 * 1024)} MB).";
+            return;
+        }
+
         try
         {
             var bytes = await File.ReadAllBytesAsync(imagePath);
@@ -221,8 +230,9 @@ public sealed partial class MainPage
         {
             await _htmlPreview.CoreWebView2.ExecuteScriptAsync(script);
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Trace.TraceWarning($"WebView2 script execution failed: {ex}");
             ActivateFallbackPreview(
                 "WebView2 Editor nicht verfuegbar, Fallback aktiv.",
                 BuildEditorHtmlFragment(_viewModel.EditorPlainText, _viewModel.EditorHtmlText));
@@ -346,7 +356,7 @@ public sealed partial class MainPage
         container.Children.Add(new TextBlock
         {
             Text = field.Label,
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 25, 64, 77)),
         });
@@ -438,7 +448,7 @@ public sealed partial class MainPage
 
                 var valueLabel = new TextBlock
                 {
-                    FontFamily = new FontFamily("Consolas"),
+                    FontFamily = MonoFont,
                     FontSize = 12,
                     Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 76, 109, 122)),
                     Text = sliderValue.ToString("0.##", CultureInfo.InvariantCulture),
@@ -617,7 +627,7 @@ public sealed partial class MainPage
                     height: 100%;
                     background: #ecf4f8;
                     color: #16313f;
-                    font-family: "Corbel", "Segoe UI", sans-serif;
+                    font-family: "Candara", "Segoe UI Variable", sans-serif;
                 }
                 #editor {
                     min-height: 100%;
@@ -644,7 +654,7 @@ public sealed partial class MainPage
                     color: #0d5250;
                     border-radius: 4px;
                     padding: 0 4px;
-                    font-family: Consolas, monospace;
+                    font-family: "Cascadia Code", "Courier New", monospace;
                     font-size: 0.9em;
                 }
                 img {
@@ -835,26 +845,9 @@ public sealed partial class MainPage
         _isUpdatingFromEditor = false;
     }
 
-    private static Button MakeActionButton(string text, RoutedEventHandler onClick, bool emphasized)
+    private static Button MakeActionButton(string text, RoutedEventHandler onClick, ButtonVisualTier tier)
     {
-        var button = new Button
-        {
-            Content = text,
-            Padding = new Thickness(12, 6, 12, 6),
-            CornerRadius = new CornerRadius(10),
-            FontFamily = new FontFamily("Corbel"),
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(emphasized
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 34, 170, 165)
-                : Microsoft.UI.ColorHelper.FromArgb(130, 80, 126, 138)),
-            Background = new SolidColorBrush(emphasized
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 20, 126, 121)
-                : Microsoft.UI.ColorHelper.FromArgb(165, 240, 247, 250)),
-            Foreground = new SolidColorBrush(emphasized
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 244, 255, 255)
-                : Microsoft.UI.ColorHelper.FromArgb(255, 29, 62, 74)),
-        };
+        var button = BuildStyledButton(text, tier);
 
         AttachHoverMotion(button, -2);
         button.Click += onClick;
@@ -863,3 +856,4 @@ public sealed partial class MainPage
 
     private sealed record FormFieldBinding(TemplateField Field, Func<object?> Getter);
 }
+

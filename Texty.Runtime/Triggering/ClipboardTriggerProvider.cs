@@ -43,11 +43,14 @@ public sealed class ClipboardTriggerProvider : ITriggerProvider
                 continue;
             }
 
-            var current = snapshot?.PlainText ?? snapshot?.HtmlText;
+            var currentRaw = snapshot?.PlainText ?? snapshot?.HtmlText;
+            var current = string.IsNullOrWhiteSpace(currentRaw) ? null : currentRaw;
+            var previous = lastSnapshot;
+            lastSnapshot = current;
+
             if (!string.IsNullOrWhiteSpace(current) &&
-                !string.Equals(current, lastSnapshot, StringComparison.Ordinal))
+                !string.Equals(current, previous, StringComparison.Ordinal))
             {
-                lastSnapshot = current;
                 var processName = _foregroundProcessProvider.GetForegroundProcessName();
                 yield return new TriggerSignal(
                     TriggerType.Clipboard,

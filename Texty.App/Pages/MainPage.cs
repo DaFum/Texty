@@ -14,6 +14,25 @@ namespace Texty.App.Pages;
 public sealed partial class MainPage : Page
 {
     private static readonly Regex PlaceholderRegex = new(@"\{\{\s*(?<key>[a-zA-Z0-9_.-]+)\s*\}\}", RegexOptions.Compiled);
+    private static readonly FontFamily DisplayFont = new("Sitka Display");
+    private static readonly FontFamily BodyFont = new("Candara");
+    private static readonly FontFamily MonoFont = new("Cascadia Code");
+
+    private static readonly Windows.UI.Color AccentTeal = Microsoft.UI.ColorHelper.FromArgb(255, 20, 126, 121);
+    private static readonly Windows.UI.Color AccentTealSoft = Microsoft.UI.ColorHelper.FromArgb(255, 34, 170, 165);
+    private static readonly Windows.UI.Color AccentCopper = Microsoft.UI.ColorHelper.FromArgb(255, 176, 102, 49);
+    private static readonly Windows.UI.Color InkDeep = Microsoft.UI.ColorHelper.FromArgb(255, 18, 42, 54);
+    private static readonly Windows.UI.Color InkStrong = Microsoft.UI.ColorHelper.FromArgb(255, 20, 48, 61);
+    private static readonly Windows.UI.Color InkLabel = Microsoft.UI.ColorHelper.FromArgb(255, 28, 63, 78);
+    private static readonly Windows.UI.Color InkMeta = Microsoft.UI.ColorHelper.FromArgb(255, 40, 78, 92);
+    private static readonly Windows.UI.Color PanelDark = Microsoft.UI.ColorHelper.FromArgb(236, 19, 38, 52);
+    private static readonly Windows.UI.Color PanelDarkBorder = Microsoft.UI.ColorHelper.FromArgb(110, 96, 169, 184);
+    private static readonly Windows.UI.Color PanelLight = Microsoft.UI.ColorHelper.FromArgb(232, 246, 242, 234);
+    private static readonly Windows.UI.Color PanelLightBorder = Microsoft.UI.ColorHelper.FromArgb(95, 110, 122, 131);
+    private static readonly Windows.UI.Color EditorLight = Microsoft.UI.ColorHelper.FromArgb(232, 236, 245, 250);
+    private static readonly Windows.UI.Color EditorLightBorder = Microsoft.UI.ColorHelper.FromArgb(90, 83, 123, 139);
+    private static readonly Windows.UI.Color TriggerDark = Microsoft.UI.ColorHelper.FromArgb(236, 22, 40, 57);
+    private static readonly Windows.UI.Color TriggerDarkBorder = Microsoft.UI.ColorHelper.FromArgb(112, 120, 202, 202);
 
     private readonly MainViewModel _viewModel = new();
 
@@ -35,6 +54,10 @@ public sealed partial class MainPage : Page
     private ListView? _folderList;
     private ListView? _snippetList;
     private Grid? _editorSplitGrid;
+    private Grid? _productivityGrid;
+    private Expander? _insertToolsExpander;
+    private TextBlock? _documentPreviewLabel;
+    private TextBlock? _clipboardPreviewLabel;
     private TextBox? _documentPreview;
     private TextBox? _clipboardPreview;
 
@@ -48,8 +71,25 @@ public sealed partial class MainPage : Page
     private bool _isWebViewInitialized;
     private bool _isEditorDomReady;
     private bool _isUpdatingFromEditor;
+    private bool _toolbarReflowReady;
 
     private bool _hasRunRevealAnimation;
+    private readonly List<AdaptiveToolbarLayout> _adaptiveToolbars = [];
+
+    private enum ButtonVisualTier
+    {
+        Primary,
+        Secondary,
+        Tertiary,
+    }
+
+    private sealed class AdaptiveToolbarLayout
+    {
+        public required Border Container { get; init; }
+        public required StackPanel RowsHost { get; init; }
+        public required IReadOnlyList<Button> Buttons { get; init; }
+        public double MinRowWidth { get; init; } = 280;
+    }
 
     public MainPage()
     {
@@ -60,42 +100,43 @@ public sealed partial class MainPage : Page
             Margin = new Thickness(24, 24, 24, 0),
             Padding = new Thickness(24, 20, 24, 18),
             CornerRadius = new CornerRadius(24),
-            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(210, 249, 246, 239)),
-            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(88, 25, 63, 76)),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(214, 250, 245, 236)),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(95, 78, 104, 116)),
             BorderThickness = new Thickness(1),
         };
 
         _leftPaneCard = CreateCard(
-            Microsoft.UI.ColorHelper.FromArgb(237, 15, 31, 44),
-            Microsoft.UI.ColorHelper.FromArgb(96, 64, 132, 149));
+            PanelDark,
+            PanelDarkBorder);
         _centerPaneCard = CreateCard(
-            Microsoft.UI.ColorHelper.FromArgb(228, 252, 248, 242),
-            Microsoft.UI.ColorHelper.FromArgb(78, 30, 75, 88));
+            PanelLight,
+            PanelLightBorder);
 
-        _rightColumnGrid = new Grid { RowSpacing = 16 };
+        _rightColumnGrid = new Grid { RowSpacing = 12 };
         _rightColumnGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _rightColumnGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(280) });
 
         _editorCard = CreateCard(
-            Microsoft.UI.ColorHelper.FromArgb(228, 247, 251, 255),
-            Microsoft.UI.ColorHelper.FromArgb(72, 35, 87, 102));
+            EditorLight,
+            EditorLightBorder);
         _triggerCard = CreateCard(
-            Microsoft.UI.ColorHelper.FromArgb(234, 24, 42, 56),
-            Microsoft.UI.ColorHelper.FromArgb(92, 109, 206, 202));
+            TriggerDark,
+            TriggerDarkBorder);
 
         _shellStatusText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 33, 69, 80)),
-            FontFamily = new FontFamily("Corbel"),
+            Foreground = new SolidColorBrush(InkLabel),
+            FontFamily = BodyFont,
             FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Right,
-            MaxWidth = 420,
+            MaxWidth = 460,
         };
 
         _triggerSummaryText = new TextBlock
         {
-            FontFamily = new FontFamily("Constantia"),
+            FontFamily = DisplayFont,
             FontSize = 17,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 237, 247, 249)),
@@ -103,7 +144,7 @@ public sealed partial class MainPage : Page
 
         _triggerTargetText = new TextBlock
         {
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontSize = 13,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 191, 223, 229)),
         };
@@ -117,7 +158,7 @@ public sealed partial class MainPage : Page
             IsReadOnly = false,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 160,
-            FontFamily = new FontFamily("Consolas"),
+            FontFamily = MonoFont,
         };
         _htmlFallbackPreview.TextChanged += (_, _) =>
         {
@@ -136,7 +177,7 @@ public sealed partial class MainPage : Page
         {
             PlaceholderText = "placeholder_key",
             MinWidth = 150,
-            FontFamily = new FontFamily("Consolas"),
+            FontFamily = MonoFont,
             CornerRadius = new CornerRadius(8),
         };
         _tableRowsInput = new NumberBox
@@ -159,7 +200,7 @@ public sealed partial class MainPage : Page
         {
             PlaceholderText = "Bildpfad (png/jpg/gif/webp/bmp)",
             MinWidth = 260,
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             CornerRadius = new CornerRadius(8),
         };
 
@@ -184,11 +225,9 @@ public sealed partial class MainPage : Page
 
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
         var atmosphere = BuildAtmosphereLayer();
         Grid.SetRowSpan(atmosphere, 2);
         root.Children.Add(atmosphere);
-
         _headerCard.Child = BuildHeaderContent();
         Grid.SetRow(_headerCard, 0);
         root.Children.Add(_headerCard);
@@ -197,7 +236,6 @@ public sealed partial class MainPage : Page
         _centerPaneCard.Child = BuildCenterPane();
         _editorCard.Child = BuildEditorPane();
         _triggerCard.Child = BuildTriggerPane();
-
         _rightColumnGrid.Children.Add(_editorCard);
         _rightColumnGrid.Children.Add(_triggerCard);
         Grid.SetRow(_editorCard, 0);
@@ -239,7 +277,7 @@ public sealed partial class MainPage : Page
         left.Children.Add(new TextBlock
         {
             Text = "Texty Control Deck",
-            FontFamily = new FontFamily("Constantia"),
+            FontFamily = DisplayFont,
             FontSize = 36,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 17, 42, 52)),
@@ -248,7 +286,7 @@ public sealed partial class MainPage : Page
         left.Children.Add(new TextBlock
         {
             Text = "Snippet-Orchestrierung fuer Explorer, Editor und Trigger in einem Arbeitsfluss.",
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontSize = 14,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 53, 87, 98)),
         });
@@ -259,7 +297,7 @@ public sealed partial class MainPage : Page
             Spacing = 4,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
-        _headerRightPanel.Children.Add(CreateBadge("GLOBAL HOOK AKTIV", Microsoft.UI.ColorHelper.FromArgb(255, 29, 155, 152), Microsoft.UI.ColorHelper.FromArgb(255, 240, 255, 255)));
+        _headerRightPanel.Children.Add(CreateBadge("GLOBAL HOOK AKTIV", AccentTeal, Microsoft.UI.ColorHelper.FromArgb(255, 240, 255, 255)));
 
         _shellStatusText.SetBinding(TextBlock.TextProperty, CreateBinding(nameof(MainViewModel.StatusText)));
         _headerRightPanel.Children.Add(_shellStatusText);
@@ -281,7 +319,7 @@ public sealed partial class MainPage : Page
         panel.Children.Add(new TextBlock
         {
             Text = "Folders",
-            FontFamily = new FontFamily("Constantia"),
+            FontFamily = DisplayFont,
             FontSize = 24,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 231, 246, 248)),
@@ -290,7 +328,7 @@ public sealed partial class MainPage : Page
         panel.Children.Add(new TextBlock
         {
             Text = "Ordne Bausteine nach Kontext und halte Favoriten in Reichweite.",
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontSize = 13,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 194, 230, 236)),
             TextWrapping = TextWrapping.Wrap,
@@ -298,8 +336,8 @@ public sealed partial class MainPage : Page
 
         _folderList = new ListView
         {
-            MinHeight = 340,
-            MaxHeight = 900,
+            MinHeight = 280,
+            MaxHeight = 760,
             DisplayMemberPath = "Name",
             SelectionMode = ListViewSelectionMode.Single,
             Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(35, 223, 242, 247)),
@@ -311,7 +349,7 @@ public sealed partial class MainPage : Page
         _folderList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedFolder), BindingMode.TwoWay));
         panel.Children.Add(_folderList);
 
-        var createButton = MakeCommandButton("Neuer Baustein", nameof(MainViewModel.CreateSnippetCommand), emphasized: true);
+        var createButton = MakeCommandButton("Neuer Baustein", nameof(MainViewModel.CreateSnippetCommand), ButtonVisualTier.Primary);
         createButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         panel.Children.Add(createButton);
 
@@ -326,11 +364,11 @@ public sealed partial class MainPage : Page
         var status = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 234, 252, 253)),
             FontSize = 12,
+            Text = "Schnellstart:\n- Baustein auswaehlen\n- Inhalte im Editor anpassen\n- Mit 'Einfuegen' ausgeben",
         };
-        status.SetBinding(TextBlock.TextProperty, CreateBinding(nameof(MainViewModel.StatusText)));
         statusCard.Child = status;
         panel.Children.Add(statusCard);
 
@@ -342,33 +380,22 @@ public sealed partial class MainPage : Page
     {
         var panel = new StackPanel
         {
-            Spacing = 12,
+            Spacing = 10,
             Padding = new Thickness(18, 18, 18, 18),
         };
 
         panel.Children.Add(new TextBlock
         {
             Text = "Library",
-            FontFamily = new FontFamily("Constantia"),
+            FontFamily = DisplayFont,
             FontSize = 24,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 22, 54, 66)),
+            Foreground = new SolidColorBrush(InkStrong),
         });
 
-        var toolbar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-        };
-        toolbar.Children.Add(MakeCommandButton("Suchen", nameof(MainViewModel.SearchCommand), emphasized: true));
-        toolbar.Children.Add(MakeCommandButton("Ersetzen", nameof(MainViewModel.SearchReplaceVisibleCommand), emphasized: true));
-        toolbar.Children.Add(MakeCommandButton("Duplikate", nameof(MainViewModel.RemoveDuplicatesCommand), emphasized: false));
-        toolbar.Children.Add(MakeCommandButton("Bulk Font", nameof(MainViewModel.ApplyBulkFontCommand), emphasized: false));
-        toolbar.Children.Add(MakeCommandButton("Duplizieren", nameof(MainViewModel.DuplicateSnippetCommand), emphasized: false));
-        toolbar.Children.Add(MakeCommandButton("Verschieben", nameof(MainViewModel.MoveSnippetToSelectedFolderCommand), emphasized: false));
-        toolbar.Children.Add(MakeCommandButton("Hervorheben", nameof(MainViewModel.ToggleHighlightCommand), emphasized: false));
-        toolbar.Children.Add(MakeCommandButton("Ausblenden", nameof(MainViewModel.ToggleHiddenCommand), emphasized: false));
-        panel.Children.Add(toolbar);
+        panel.Children.Add(BuildLibraryCommandBar());
+
+        panel.Children.Add(CreateSectionLabel("Suche"));
 
         var searchFrame = new Border
         {
@@ -382,12 +409,15 @@ public sealed partial class MainPage : Page
         {
             PlaceholderText = "Suchen, ersetzen, filtern...",
             BorderThickness = new Thickness(0),
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontSize = 14,
         };
+        ApplyInputChrome(search);
         search.SetBinding(AutoSuggestBox.TextProperty, CreateBinding(nameof(MainViewModel.SearchTerm), BindingMode.TwoWay));
         searchFrame.Child = search;
         panel.Children.Add(searchFrame);
+
+        panel.Children.Add(CreateSectionLabel("Ersetzen (Scope: aktuelle Trefferliste)"));
 
         var replaceFrame = new Border
         {
@@ -401,9 +431,10 @@ public sealed partial class MainPage : Page
         {
             PlaceholderText = "Ersetzen durch...",
             BorderThickness = new Thickness(0),
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontSize = 14,
         };
+        ApplyInputChrome(replace);
         replace.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ReplaceTerm), BindingMode.TwoWay));
         replaceFrame.Child = replace;
         panel.Children.Add(replaceFrame);
@@ -411,13 +442,13 @@ public sealed partial class MainPage : Page
         _snippetList = new ListView
         {
             DisplayMemberPath = "Title",
-            MinHeight = 450,
-            MaxHeight = 980,
+            MinHeight = 340,
+            MaxHeight = 780,
             SelectionMode = ListViewSelectionMode.Single,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(8),
             CornerRadius = new CornerRadius(16),
-            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(152, 245, 252, 255)),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(196, 245, 252, 255)),
         };
         _snippetList.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.VisibleSnippets)));
         _snippetList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedSnippet), BindingMode.TwoWay));
@@ -431,100 +462,41 @@ public sealed partial class MainPage : Page
     {
         var panel = new StackPanel
         {
-            Spacing = 10,
+            Spacing = 8,
             Padding = new Thickness(18, 18, 18, 18),
         };
 
         panel.Children.Add(new TextBlock
         {
             Text = "Editor Studio",
-            FontFamily = new FontFamily("Constantia"),
+            FontFamily = DisplayFont,
             FontSize = 24,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 22, 61, 74)),
+            Foreground = new SolidColorBrush(InkStrong),
         });
 
-        var actions = new StackPanel
+        panel.Children.Add(CreateSectionLabel("Workflow"));
+        panel.Children.Add(BuildEditorWorkflowCommandBar());
+
+        panel.Children.Add(CreateSectionLabel("Formatierung"));
+        panel.Children.Add(BuildFormattingCommandBar());
+
+        _insertToolsExpander = new Expander
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Header = "Einfuegen-Tools (Placeholder, Tabelle, Bild)",
+            IsExpanded = false,
+            Margin = new Thickness(0, 2, 0, 4),
+            Content = BuildInsertToolsPanel(),
         };
-        actions.Children.Add(MakeCommandButton("Speichern", nameof(MainViewModel.SaveSnippetCommand), emphasized: true));
-        actions.Children.Add(MakeActionButton("Einfuegen", OnInsertClicked, emphasized: true));
-        actions.Children.Add(MakeCommandButton("Simulieren", nameof(MainViewModel.SimulateInsertCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Versionen", nameof(MainViewModel.LoadVersionsCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Rollback", nameof(MainViewModel.RollbackToPreviousVersionCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Papierkorb", nameof(MainViewModel.MoveToTrashCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Aus Trash", nameof(MainViewModel.RestoreLatestTrashCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Trash leeren", nameof(MainViewModel.PurgeTrashCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Dokument", nameof(MainViewModel.GenerateDocumentCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Korrektur", nameof(MainViewModel.ApplyTextCorrectionsCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Clip Verlauf", nameof(MainViewModel.LoadClipboardHistoryCommand), emphasized: false));
-        actions.Children.Add(MakeCommandButton("Clip laden", nameof(MainViewModel.InsertLatestClipboardHistoryCommand), emphasized: false));
-        panel.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = actions,
-        });
-
-        var editorToolbar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        editorToolbar.Children.Add(MakeActionButton("Fett", OnFormatBoldClicked, emphasized: false));
-        editorToolbar.Children.Add(MakeActionButton("Kursiv", OnFormatItalicClicked, emphasized: false));
-        editorToolbar.Children.Add(MakeActionButton("Unterstrichen", OnFormatUnderlineClicked, emphasized: false));
-        editorToolbar.Children.Add(MakeActionButton("Liste", OnBulletListClicked, emphasized: false));
-        editorToolbar.Children.Add(MakeActionButton("Nummeriert", OnNumberedListClicked, emphasized: false));
-
-        editorToolbar.Children.Add(new Border
-        {
-            Width = 1,
-            Height = 28,
-            Margin = new Thickness(4, 0, 4, 0),
-            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(72, 54, 102, 117)),
-        });
-
-        editorToolbar.Children.Add(_placeholderTokenInput);
-        editorToolbar.Children.Add(MakeActionButton("Placeholder", OnInsertPlaceholderClicked, emphasized: false));
-
-        editorToolbar.Children.Add(new TextBlock
-        {
-            Text = "Tabelle",
-            VerticalAlignment = VerticalAlignment.Center,
-            FontFamily = new FontFamily("Corbel"),
-            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 42, 77, 91)),
-        });
-        editorToolbar.Children.Add(_tableRowsInput);
-        editorToolbar.Children.Add(new TextBlock
-        {
-            Text = "x",
-            VerticalAlignment = VerticalAlignment.Center,
-            FontFamily = new FontFamily("Corbel"),
-            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 42, 77, 91)),
-        });
-        editorToolbar.Children.Add(_tableColumnsInput);
-        editorToolbar.Children.Add(MakeActionButton("Einfuegen", OnInsertTableClicked, emphasized: false));
-
-        editorToolbar.Children.Add(_imagePathInput);
-        editorToolbar.Children.Add(MakeActionButton("Bild", OnInsertImageClicked, emphasized: false));
-
-        panel.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = editorToolbar,
-        });
+        panel.Children.Add(_insertToolsExpander);
 
         var titleBox = new TextBox
         {
             Header = "Titel",
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             CornerRadius = new CornerRadius(10),
         };
+        ApplyInputChrome(titleBox);
         titleBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.EditorTitle), BindingMode.TwoWay));
         panel.Children.Add(titleBox);
 
@@ -538,13 +510,14 @@ public sealed partial class MainPage : Page
         var tagInput = new TextBox
         {
             Header = "Tag",
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             CornerRadius = new CornerRadius(10),
         };
+        ApplyInputChrome(tagInput);
         tagInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.EditorTagInput), BindingMode.TwoWay));
         tagGrid.Children.Add(tagInput);
 
-        var tagButton = MakeCommandButton("Tag speichern", nameof(MainViewModel.AddTagCommand), emphasized: false);
+        var tagButton = MakeCommandButton("Tag speichern", nameof(MainViewModel.AddTagCommand), ButtonVisualTier.Secondary);
         Grid.SetColumn(tagButton, 1);
         tagGrid.Children.Add(tagButton);
         panel.Children.Add(tagGrid);
@@ -559,13 +532,14 @@ public sealed partial class MainPage : Page
         var commentInput = new TextBox
         {
             Header = "Kommentar",
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             CornerRadius = new CornerRadius(10),
         };
+        ApplyInputChrome(commentInput);
         commentInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.EditorCommentInput), BindingMode.TwoWay));
         commentGrid.Children.Add(commentInput);
 
-        var commentButton = MakeCommandButton("Kommentar speichern", nameof(MainViewModel.AddCommentCommand), emphasized: false);
+        var commentButton = MakeCommandButton("Kommentar speichern", nameof(MainViewModel.AddCommentCommand), ButtonVisualTier.Secondary);
         Grid.SetColumn(commentButton, 1);
         commentGrid.Children.Add(commentButton);
         panel.Children.Add(commentGrid);
@@ -573,20 +547,21 @@ public sealed partial class MainPage : Page
         _editorSplitGrid = new Grid
         {
             RowSpacing = 8,
-            MinHeight = 460,
+            MinHeight = 360,
         };
-        _editorSplitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.95, GridUnitType.Star) });
-        _editorSplitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.45, GridUnitType.Star) });
+        _editorSplitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        _editorSplitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.12, GridUnitType.Star) });
 
         var plain = new TextBox
         {
             Header = "Text (plain)",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontSize = 14,
             CornerRadius = new CornerRadius(14),
         };
+        ApplyInputChrome(plain);
         ScrollViewer.SetVerticalScrollBarVisibility(plain, ScrollBarVisibility.Auto);
         plain.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.EditorPlainText), BindingMode.TwoWay));
         Grid.SetRow(plain, 0);
@@ -612,47 +587,74 @@ public sealed partial class MainPage : Page
         panel.Children.Add(new TextBlock
         {
             Text = "WYSIWYG Editor: Formatierung, Tabellen, Bilder und Placeholder mit sicherer Sanitization.",
-            FontFamily = new FontFamily("Corbel"),
+            FontFamily = BodyFont,
             FontSize = 12,
-            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 74, 116, 127)),
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Foreground = new SolidColorBrush(InkMeta),
         });
 
-        var productivityGrid = new Grid
+        _productivityGrid = new Grid
         {
             ColumnSpacing = 10,
+            RowSpacing = 6,
         };
-        productivityGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        productivityGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _productivityGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _productivityGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        _documentPreviewLabel = new TextBlock
+        {
+            Text = "Dokumentgenerator Vorschau",
+            FontFamily = BodyFont,
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Foreground = new SolidColorBrush(InkLabel),
+        };
+        _productivityGrid.Children.Add(_documentPreviewLabel);
 
         _documentPreview = new TextBox
         {
-            Header = "Dokumentgenerator Vorschau",
             AcceptsReturn = true,
             IsReadOnly = true,
             MinHeight = 110,
             TextWrapping = TextWrapping.Wrap,
-            FontFamily = new FontFamily("Consolas"),
+            FontFamily = MonoFont,
             CornerRadius = new CornerRadius(10),
         };
+        ApplyInputChrome(_documentPreview);
         ScrollViewer.SetVerticalScrollBarVisibility(_documentPreview, ScrollBarVisibility.Auto);
         _documentPreview.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.DocumentPreviewText), BindingMode.OneWay));
-        productivityGrid.Children.Add(_documentPreview);
+        Grid.SetRow(_documentPreview, 1);
+        _productivityGrid.Children.Add(_documentPreview);
+
+        _clipboardPreviewLabel = new TextBlock
+        {
+            Text = "Mehrfach-Clipboard Vorschau",
+            FontFamily = BodyFont,
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Foreground = new SolidColorBrush(InkLabel),
+        };
+        Grid.SetColumn(_clipboardPreviewLabel, 1);
+        _productivityGrid.Children.Add(_clipboardPreviewLabel);
 
         _clipboardPreview = new TextBox
         {
-            Header = "Mehrfach-Clipboard Vorschau",
             AcceptsReturn = true,
             IsReadOnly = true,
             MinHeight = 110,
             TextWrapping = TextWrapping.Wrap,
-            FontFamily = new FontFamily("Consolas"),
+            FontFamily = MonoFont,
             CornerRadius = new CornerRadius(10),
         };
+        ApplyInputChrome(_clipboardPreview);
         ScrollViewer.SetVerticalScrollBarVisibility(_clipboardPreview, ScrollBarVisibility.Auto);
         _clipboardPreview.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ClipboardPreviewText), BindingMode.OneWay));
         Grid.SetColumn(_clipboardPreview, 1);
-        productivityGrid.Children.Add(_clipboardPreview);
-        panel.Children.Add(productivityGrid);
+        Grid.SetRow(_clipboardPreview, 1);
+        _productivityGrid.Children.Add(_clipboardPreview);
+        panel.Children.Add(_productivityGrid);
 
         AttachHoverMotion(_editorCard, -3);
         return panel;
@@ -678,7 +680,7 @@ public sealed partial class MainPage : Page
         _triggerSummaryText.Text = "Keine Trigger geladen";
         header.Children.Add(_triggerSummaryText);
 
-        var liveBadge = CreateBadge("LISTENING", Microsoft.UI.ColorHelper.FromArgb(255, 41, 188, 182), Microsoft.UI.ColorHelper.FromArgb(255, 241, 255, 253));
+        var liveBadge = CreateBadge("LISTENING", AccentTealSoft, Microsoft.UI.ColorHelper.FromArgb(255, 241, 255, 253));
         Grid.SetColumn(liveBadge, 1);
         header.Children.Add(liveBadge);
 
@@ -700,6 +702,304 @@ public sealed partial class MainPage : Page
 
         AttachHoverMotion(_triggerCard, -3);
         return panel;
+    }
+
+    private UIElement BuildLibraryCommandBar()
+    {
+        var buttons = new List<Button>
+        {
+            MakeToolbarCommandButton("Suchen", nameof(MainViewModel.SearchCommand), ButtonVisualTier.Primary),
+            MakeToolbarCommandButton("Ersetzen", nameof(MainViewModel.SearchReplaceVisibleCommand), ButtonVisualTier.Secondary),
+            MakeToolbarCommandButton("Duplikate", nameof(MainViewModel.RemoveDuplicatesCommand), ButtonVisualTier.Secondary),
+            MakeToolbarCommandButton("Duplizieren", nameof(MainViewModel.DuplicateSnippetCommand), ButtonVisualTier.Secondary),
+            MakeToolbarCommandButton("Verschieben", nameof(MainViewModel.MoveSnippetToSelectedFolderCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Bulk Font", nameof(MainViewModel.ApplyBulkFontCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Hervorheben", nameof(MainViewModel.ToggleHighlightCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Ausblenden", nameof(MainViewModel.ToggleHiddenCommand), ButtonVisualTier.Tertiary),
+        };
+        return BuildAdaptiveToolbar(buttons, 300);
+    }
+
+    private UIElement BuildEditorWorkflowCommandBar()
+    {
+        var buttons = new List<Button>
+        {
+            MakeToolbarActionButton("Einfuegen", OnInsertClicked, ButtonVisualTier.Primary),
+            MakeToolbarCommandButton("Speichern", nameof(MainViewModel.SaveSnippetCommand), ButtonVisualTier.Secondary),
+            MakeToolbarCommandButton("Simulieren", nameof(MainViewModel.SimulateInsertCommand), ButtonVisualTier.Secondary),
+            MakeToolbarCommandButton("Versionen", nameof(MainViewModel.LoadVersionsCommand), ButtonVisualTier.Secondary),
+            MakeToolbarCommandButton("Rollback", nameof(MainViewModel.RollbackToPreviousVersionCommand), ButtonVisualTier.Secondary),
+            MakeToolbarCommandButton("Papierkorb", nameof(MainViewModel.MoveToTrashCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Aus Trash", nameof(MainViewModel.RestoreLatestTrashCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Trash leeren", nameof(MainViewModel.PurgeTrashCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Dokument", nameof(MainViewModel.GenerateDocumentCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Korrektur", nameof(MainViewModel.ApplyTextCorrectionsCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Clip Verlauf", nameof(MainViewModel.LoadClipboardHistoryCommand), ButtonVisualTier.Tertiary),
+            MakeToolbarCommandButton("Clip laden", nameof(MainViewModel.InsertLatestClipboardHistoryCommand), ButtonVisualTier.Tertiary),
+        };
+        return BuildAdaptiveToolbar(buttons, 340);
+    }
+
+    private UIElement BuildFormattingCommandBar()
+    {
+        var buttons = new List<Button>
+        {
+            MakeToolbarActionButton("Fett", OnFormatBoldClicked, ButtonVisualTier.Primary),
+            MakeToolbarActionButton("Kursiv", OnFormatItalicClicked, ButtonVisualTier.Secondary),
+            MakeToolbarActionButton("Unterstrichen", OnFormatUnderlineClicked, ButtonVisualTier.Secondary),
+            MakeToolbarActionButton("Liste", OnBulletListClicked, ButtonVisualTier.Tertiary),
+            MakeToolbarActionButton("Nummeriert", OnNumberedListClicked, ButtonVisualTier.Tertiary),
+        };
+        return BuildAdaptiveToolbar(buttons, 280);
+    }
+
+    private UIElement BuildInsertToolsPanel()
+    {
+        ApplyInputChrome(_placeholderTokenInput);
+        ApplyInputChrome(_tableRowsInput);
+        ApplyInputChrome(_tableColumnsInput);
+        ApplyInputChrome(_imagePathInput);
+
+        var panel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(2, 6, 2, 4),
+        };
+
+        var placeholderRow = new Grid { ColumnSpacing = 8 };
+        placeholderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        placeholderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        placeholderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        placeholderRow.Children.Add(new TextBlock
+        {
+            Text = "Placeholder",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = BodyFont,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(InkLabel),
+        });
+        Grid.SetColumn(_placeholderTokenInput, 1);
+        placeholderRow.Children.Add(_placeholderTokenInput);
+        var placeholderButton = MakeActionButton("Einsetzen", OnInsertPlaceholderClicked, ButtonVisualTier.Secondary);
+        Grid.SetColumn(placeholderButton, 2);
+        placeholderRow.Children.Add(placeholderButton);
+        panel.Children.Add(placeholderRow);
+
+        var tableRow = new Grid { ColumnSpacing = 8 };
+        tableRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        tableRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(72) });
+        tableRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        tableRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(72) });
+        tableRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        tableRow.Children.Add(new TextBlock
+        {
+            Text = "Tabelle",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = BodyFont,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(InkLabel),
+        });
+        Grid.SetColumn(_tableRowsInput, 1);
+        tableRow.Children.Add(_tableRowsInput);
+        var byText = new TextBlock
+        {
+            Text = "x",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = BodyFont,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(InkLabel),
+        };
+        Grid.SetColumn(byText, 2);
+        tableRow.Children.Add(byText);
+        Grid.SetColumn(_tableColumnsInput, 3);
+        tableRow.Children.Add(_tableColumnsInput);
+        var tableButton = MakeActionButton("Einfuegen", OnInsertTableClicked, ButtonVisualTier.Secondary);
+        Grid.SetColumn(tableButton, 4);
+        tableRow.Children.Add(tableButton);
+        panel.Children.Add(tableRow);
+
+        var imageRow = new Grid { ColumnSpacing = 8 };
+        imageRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        imageRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        imageRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        imageRow.Children.Add(new TextBlock
+        {
+            Text = "Bildpfad",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = BodyFont,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(InkLabel),
+        });
+        Grid.SetColumn(_imagePathInput, 1);
+        imageRow.Children.Add(_imagePathInput);
+        var imageButton = MakeActionButton("Bild einfuegen", OnInsertImageClicked, ButtonVisualTier.Secondary);
+        Grid.SetColumn(imageButton, 2);
+        imageRow.Children.Add(imageButton);
+        panel.Children.Add(imageRow);
+
+        return panel;
+    }
+
+    private UIElement BuildAdaptiveToolbar(IReadOnlyList<Button> buttons, double minRowWidth)
+    {
+        var rowsHost = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Spacing = 6,
+        };
+
+        var container = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(118, 86, 121, 136)),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(200, 246, 251, 255)),
+            Padding = new Thickness(8),
+            Child = rowsHost,
+        };
+
+        var layout = new AdaptiveToolbarLayout
+        {
+            Container = container,
+            RowsHost = rowsHost,
+            Buttons = buttons.ToList(),
+            MinRowWidth = minRowWidth,
+        };
+
+        // Initial render without dynamic re-parenting during early page construction.
+        var initialRow = CreateToolbarRow();
+        foreach (var button in layout.Buttons)
+        {
+            button.Margin = new Thickness(0, 0, 8, 0);
+            initialRow.Children.Add(button);
+        }
+
+        layout.RowsHost.Children.Add(initialRow);
+        _adaptiveToolbars.Add(layout);
+        container.SizeChanged += (_, args) =>
+        {
+            if (!_toolbarReflowReady)
+            {
+                return;
+            }
+
+            try
+            {
+                ReflowAdaptiveToolbar(layout, args.NewSize.Width);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"Adaptive toolbar reflow failed on size change: {ex}");
+            }
+        };
+
+        return container;
+    }
+
+    private void ReflowAdaptiveToolbars()
+    {
+        if (!_toolbarReflowReady)
+        {
+            return;
+        }
+
+        foreach (var layout in _adaptiveToolbars)
+        {
+            try
+            {
+                ReflowAdaptiveToolbar(layout, layout.Container.ActualWidth);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"Adaptive toolbar reflow failed: {ex}");
+            }
+        }
+    }
+
+    private static void ReflowAdaptiveToolbar(AdaptiveToolbarLayout layout, double widthHint)
+    {
+        var availableWidth = Math.Max(layout.MinRowWidth, widthHint > 0 ? widthHint - 22 : layout.MinRowWidth);
+        layout.RowsHost.Children.Clear();
+
+        var currentRow = CreateToolbarRow();
+        var currentWidth = 0d;
+
+        foreach (var button in layout.Buttons)
+        {
+            // Buttons can already belong to a previous row from an earlier reflow.
+            // Detach first to avoid "already has a parent" exceptions on startup/resize.
+            if (button.Parent is Panel previousParent)
+            {
+                previousParent.Children.Remove(button);
+            }
+
+            var estimatedWidth = EstimateButtonWidth(button);
+            if (currentRow.Children.Count > 0 && currentWidth + estimatedWidth > availableWidth)
+            {
+                layout.RowsHost.Children.Add(currentRow);
+                currentRow = CreateToolbarRow();
+                currentWidth = 0;
+            }
+
+            button.Margin = new Thickness(0, 0, 8, 0);
+            currentRow.Children.Add(button);
+            currentWidth += estimatedWidth;
+        }
+
+        if (currentRow.Children.Count > 0)
+        {
+            layout.RowsHost.Children.Add(currentRow);
+        }
+    }
+
+    private static StackPanel CreateToolbarRow()
+    {
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 0,
+        };
+    }
+
+    private static double EstimateButtonWidth(Button button)
+    {
+        var text = button.Content as string ?? string.Empty;
+        return Math.Max(98, (text.Length * 8) + 54);
+    }
+
+    private static Button MakeToolbarCommandButton(string text, string commandPath, ButtonVisualTier tier)
+    {
+        var button = MakeCommandButton(text, commandPath, tier);
+        ApplyToolbarButtonMetrics(button);
+        return button;
+    }
+
+    private static Button MakeToolbarActionButton(string text, RoutedEventHandler onClick, ButtonVisualTier tier)
+    {
+        var button = MakeActionButton(text, onClick, tier);
+        ApplyToolbarButtonMetrics(button);
+        return button;
+    }
+
+    private static void ApplyToolbarButtonMetrics(Button button)
+    {
+        button.MinWidth = 98;
+        button.MinHeight = 34;
+        button.Margin = new Thickness(0, 0, 8, 0);
+    }
+
+    private static TextBlock CreateSectionLabel(string text)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            FontFamily = BodyFont,
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Foreground = new SolidColorBrush(InkLabel),
+            Margin = new Thickness(0, 2, 0, 2),
+        };
     }
 
     private FrameworkElement BuildPreviewControl()
@@ -730,6 +1030,8 @@ public sealed partial class MainPage : Page
     {
         try
         {
+            _toolbarReflowReady = true;
+            ReflowAdaptiveToolbars();
             await _viewModel.InitializeAsync();
             await EnsurePreviewInitializedAsync();
             await PushViewModelContentToEditorAsync();
@@ -776,8 +1078,9 @@ public sealed partial class MainPage : Page
                 await _htmlPreview.CoreWebView2.ExecuteScriptAsync($"window.textyEditor?.setHtml({jsonPayload});");
                 return;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Trace.TraceWarning($"WebView2 setHtml failed: {ex}");
                 ActivateFallbackPreview("WebView2 Editor nicht verfuegbar, Fallback aktiv.", htmlFragment);
             }
         }
@@ -849,7 +1152,7 @@ public sealed partial class MainPage : Page
         top.Children.Add(new TextBlock
         {
             Text = trigger.Pattern,
-            FontFamily = new FontFamily("Consolas"),
+            FontFamily = MonoFont,
             FontSize = 13,
             Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 232, 250, 250)),
         });
@@ -910,36 +1213,73 @@ public sealed partial class MainPage : Page
             {
                 Text = text,
                 TextWrapping = TextWrapping.Wrap,
-                FontFamily = new FontFamily("Corbel"),
+                FontFamily = BodyFont,
                 Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 202, 233, 237)),
             },
         };
     }
 
-    private static Button MakeCommandButton(string text, string commandPath, bool emphasized)
+    private static void ApplyInputChrome(Control control)
     {
-        var button = new Button
-        {
-            Content = text,
-            Padding = new Thickness(14, 7, 14, 7),
-            CornerRadius = new CornerRadius(10),
-            FontFamily = new FontFamily("Corbel"),
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(emphasized
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 34, 170, 165)
-                : Microsoft.UI.ColorHelper.FromArgb(130, 80, 126, 138)),
-            Background = new SolidColorBrush(emphasized
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 20, 126, 121)
-                : Microsoft.UI.ColorHelper.FromArgb(165, 240, 247, 250)),
-            Foreground = new SolidColorBrush(emphasized
-                ? Microsoft.UI.ColorHelper.FromArgb(255, 244, 255, 255)
-                : Microsoft.UI.ColorHelper.FromArgb(255, 29, 62, 74)),
-        };
+        var foreground = new SolidColorBrush(InkStrong);
+        control.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(248, 253, 255, 255));
+        control.BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(178, 74, 111, 127));
+        control.BorderThickness = new Thickness(1);
+        control.Foreground = foreground;
+        var headerForeground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 41, 77, 92));
+        control.Resources["TextControlPlaceholderForeground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 71, 107, 122));
+        control.Resources["TextControlForeground"] = foreground;
+        control.Resources["TextControlBackground"] = control.Background;
+        control.Resources["TextControlBorderBrush"] = control.BorderBrush;
+        control.Resources["TextControlHeaderForeground"] = headerForeground;
+        control.UseSystemFocusVisuals = true;
+    }
+
+    private static Button MakeCommandButton(string text, string commandPath, ButtonVisualTier tier)
+    {
+        var button = BuildStyledButton(text, tier);
 
         AttachHoverMotion(button, -2);
         button.SetBinding(Button.CommandProperty, CreateBinding(commandPath));
         return button;
+    }
+
+    private static Button BuildStyledButton(string text, ButtonVisualTier tier)
+    {
+        var palette = ResolveButtonPalette(tier);
+        return new Button
+        {
+            Content = text,
+            Padding = new Thickness(14, 7, 14, 7),
+            CornerRadius = new CornerRadius(10),
+            FontFamily = BodyFont,
+            FontWeight = tier == ButtonVisualTier.Tertiary
+                ? Microsoft.UI.Text.FontWeights.Normal
+                : Microsoft.UI.Text.FontWeights.SemiBold,
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(palette.Border),
+            Background = new SolidColorBrush(palette.Background),
+            Foreground = new SolidColorBrush(palette.Foreground),
+        };
+    }
+
+    private static (Windows.UI.Color Background, Windows.UI.Color Border, Windows.UI.Color Foreground) ResolveButtonPalette(ButtonVisualTier tier)
+    {
+        return tier switch
+        {
+            ButtonVisualTier.Primary => (
+                AccentTeal,
+                Microsoft.UI.ColorHelper.FromArgb(255, 14, 131, 127),
+                Microsoft.UI.ColorHelper.FromArgb(255, 245, 255, 255)),
+            ButtonVisualTier.Tertiary => (
+                Microsoft.UI.ColorHelper.FromArgb(36, 255, 255, 255),
+                Microsoft.UI.ColorHelper.FromArgb(112, 86, 120, 136),
+                Microsoft.UI.ColorHelper.FromArgb(255, 51, 82, 96)),
+            _ => (
+                Microsoft.UI.ColorHelper.FromArgb(244, 239, 248, 252),
+                Microsoft.UI.ColorHelper.FromArgb(176, 69, 106, 122),
+                Microsoft.UI.ColorHelper.FromArgb(255, 28, 63, 78)),
+        };
     }
     private static Border CreateBadge(string text, Windows.UI.Color background, Windows.UI.Color foreground)
     {
@@ -952,7 +1292,7 @@ public sealed partial class MainPage : Page
             Child = new TextBlock
             {
                 Text = text,
-                FontFamily = new FontFamily("Corbel"),
+                FontFamily = BodyFont,
                 FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(safeForeground),
@@ -978,9 +1318,9 @@ public sealed partial class MainPage : Page
             StartPoint = new Windows.Foundation.Point(0, 0),
             EndPoint = new Windows.Foundation.Point(1, 1),
         };
-        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(255, 248, 243, 232), Offset = 0 });
-        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(255, 228, 240, 244), Offset = 0.55 });
-        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(255, 244, 237, 226), Offset = 1 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(255, 246, 236, 220), Offset = 0 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(255, 220, 236, 242), Offset = 0.52 });
+        brush.GradientStops.Add(new GradientStop { Color = Microsoft.UI.ColorHelper.FromArgb(255, 238, 230, 220), Offset = 1 });
         return brush;
     }
 
@@ -996,7 +1336,7 @@ public sealed partial class MainPage : Page
         {
             Width = 420,
             Height = 420,
-            Fill = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 33, 193, 186)),
+            Fill = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(44, AccentTeal.R, AccentTeal.G, AccentTeal.B)),
             Margin = new Thickness(-80, -110, 0, 0),
         });
 
@@ -1004,7 +1344,7 @@ public sealed partial class MainPage : Page
         {
             Width = 340,
             Height = 340,
-            Fill = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(35, 230, 145, 68)),
+            Fill = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(38, AccentCopper.R, AccentCopper.G, AccentCopper.B)),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -70, -110, 0),
@@ -1014,7 +1354,7 @@ public sealed partial class MainPage : Page
         {
             Height = 280,
             Width = 840,
-            Fill = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(20, 12, 42, 55)),
+            Fill = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(22, InkDeep.R, InkDeep.G, InkDeep.B)),
             Margin = new Thickness(140, 340, 0, 0),
             RenderTransform = new RotateTransform { Angle = -9 },
         });
@@ -1064,8 +1404,9 @@ public sealed partial class MainPage : Page
     private void ApplyResponsiveLayout(double width)
     {
         var effective = width > 0 ? width : 1400;
-        var stackedLayout = effective < 1280;
-        var compact = effective < 900;
+        var stackedLayout = effective < 1300;
+        var compact = effective < 980;
+        var wide = effective >= 1620;
 
         _headerCard.Margin = compact
             ? new Thickness(12, 12, 12, 0)
@@ -1083,8 +1424,8 @@ public sealed partial class MainPage : Page
             : stackedLayout
                 ? new Thickness(16, 14, 16, 20)
                 : new Thickness(24, 18, 24, 24);
-        _mainGrid.ColumnSpacing = compact ? 10 : stackedLayout ? 14 : 18;
-        _mainGrid.RowSpacing = compact ? 10 : stackedLayout ? 14 : 18;
+        _mainGrid.ColumnSpacing = compact ? 8 : stackedLayout ? 12 : wide ? 20 : 16;
+        _mainGrid.RowSpacing = compact ? 8 : stackedLayout ? 12 : wide ? 20 : 16;
 
         ConfigureHeaderLayout(stackedLayout);
         ApplyDensityByWidth(effective);
@@ -1113,8 +1454,8 @@ public sealed partial class MainPage : Page
         }
         else
         {
-            _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
-            _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(430) });
+            _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(wide ? 320 : 280) });
+            _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(wide ? 460 : 390) });
             _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             _mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
@@ -1128,8 +1469,10 @@ public sealed partial class MainPage : Page
             Grid.SetRow(_rightColumnGrid, 0);
 
             _rightColumnGrid.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
-            _rightColumnGrid.RowDefinitions[1].Height = new GridLength(effective < 1500 ? 240 : 280);
+            _rightColumnGrid.RowDefinitions[1].Height = new GridLength(wide ? 220 : 180);
         }
+
+        ReflowAdaptiveToolbars();
     }
 
     private void ConfigureHeaderLayout(bool stackedLayout)
@@ -1171,34 +1514,89 @@ public sealed partial class MainPage : Page
 
     private void ApplyDensityByWidth(double width)
     {
-        var compact = width < 900;
-        var stacked = width < 1280;
+        var compact = width < 980;
+        var stacked = width < 1300;
+        var medium = width >= 980 && width < 1300;
 
         if (_folderList is not null)
         {
-            _folderList.MinHeight = compact ? 180 : stacked ? 220 : 340;
-            _folderList.MaxHeight = compact ? 420 : 900;
+            _folderList.MinHeight = compact ? 150 : stacked ? 190 : 260;
+            _folderList.MaxHeight = compact ? 300 : medium ? 420 : 760;
         }
 
         if (_snippetList is not null)
         {
-            _snippetList.MinHeight = compact ? 240 : stacked ? 320 : 450;
-            _snippetList.MaxHeight = compact ? 520 : 980;
+            _snippetList.MinHeight = compact ? 190 : stacked ? 250 : 340;
+            _snippetList.MaxHeight = compact ? 340 : medium ? 520 : 780;
         }
 
         if (_editorSplitGrid is not null)
         {
-            _editorSplitGrid.MinHeight = compact ? 320 : stacked ? 380 : 460;
+            _editorSplitGrid.MinHeight = compact ? 230 : stacked ? 290 : 350;
         }
 
         if (_documentPreview is not null)
         {
-            _documentPreview.MinHeight = compact ? 86 : 110;
+            _documentPreview.MinHeight = compact ? 72 : 88;
         }
 
         if (_clipboardPreview is not null)
         {
-            _clipboardPreview.MinHeight = compact ? 86 : 110;
+            _clipboardPreview.MinHeight = compact ? 72 : 88;
+        }
+
+        if (_insertToolsExpander is not null && compact)
+        {
+            _insertToolsExpander.IsExpanded = false;
+        }
+
+        if (_productivityGrid is not null &&
+            _documentPreview is not null &&
+            _clipboardPreview is not null &&
+            _documentPreviewLabel is not null &&
+            _clipboardPreviewLabel is not null)
+        {
+            _productivityGrid.RowDefinitions.Clear();
+            _productivityGrid.ColumnDefinitions.Clear();
+            if (compact || medium)
+            {
+                _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                _productivityGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                Grid.SetColumn(_documentPreviewLabel, 0);
+                Grid.SetRow(_documentPreviewLabel, 0);
+                Grid.SetColumn(_documentPreview, 0);
+                Grid.SetRow(_documentPreview, 1);
+                _documentPreview.Margin = new Thickness(0);
+
+                Grid.SetColumn(_clipboardPreviewLabel, 0);
+                Grid.SetRow(_clipboardPreviewLabel, 2);
+                Grid.SetColumn(_clipboardPreview, 0);
+                Grid.SetRow(_clipboardPreview, 3);
+                _clipboardPreview.Margin = new Thickness(0, 8, 0, 0);
+            }
+            else
+            {
+                _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                _productivityGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                _productivityGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                _productivityGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                Grid.SetColumn(_documentPreviewLabel, 0);
+                Grid.SetRow(_documentPreviewLabel, 0);
+                Grid.SetColumn(_documentPreview, 0);
+                Grid.SetRow(_documentPreview, 1);
+                _documentPreview.Margin = new Thickness(0);
+
+                Grid.SetColumn(_clipboardPreviewLabel, 1);
+                Grid.SetRow(_clipboardPreviewLabel, 0);
+                Grid.SetColumn(_clipboardPreview, 1);
+                Grid.SetRow(_clipboardPreview, 1);
+                _clipboardPreview.Margin = new Thickness(0);
+            }
         }
     }
 
@@ -1346,8 +1744,9 @@ public sealed partial class MainPage : Page
             _isWebViewInitialized = true;
             _isEditorDomReady = false;
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Trace.TraceWarning($"WebView2 initialization failed: {ex}");
             ActivateFallbackPreview(
                 "WebView2 Editor nicht verfuegbar, Fallback aktiv.",
                 BuildEditorHtmlFragment(_viewModel.EditorPlainText, _viewModel.EditorHtmlText));
@@ -1395,3 +1794,4 @@ public sealed partial class MainPage : Page
         return cleaned;
     }
 }
+

@@ -11,7 +11,7 @@ public sealed class TextyRibbon : IRibbonExtensibility
 
     public TextyRibbon(ThisAddIn addin)
     {
-        _addin = addin;
+        _addin = addin ?? throw new ArgumentNullException(nameof(addin));
     }
 
     public string GetCustomUI(string ribbonId)

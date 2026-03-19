@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
 using Texty.Runtime.Audit;
@@ -88,8 +89,7 @@ public sealed class MacroActionExecutor : IMacroActionExecutor
             Arguments = arguments,
             UseShellExecute = true,
         };
-        _ = Process.Start(psi);
-        return Task.FromResult(new MacroActionResult(true, false, "Program started."));
+        return Task.FromResult(StartProcess(psi, "Program started."));
     }
 
     private static Task<MacroActionResult> OpenFileOrUrlAsync(
@@ -119,8 +119,7 @@ public sealed class MacroActionExecutor : IMacroActionExecutor
             FileName = target,
             UseShellExecute = true,
         };
-        _ = Process.Start(psi);
-        return Task.FromResult(new MacroActionResult(true, false, isUrl ? "URL opened." : "File opened."));
+        return Task.FromResult(StartProcess(psi, isUrl ? "URL opened." : "File opened."));
     }
 
     private static Task<MacroActionResult> OpenExplorerAsync(MacroActionRequest request, CancellationToken cancellationToken)
@@ -138,8 +137,7 @@ public sealed class MacroActionExecutor : IMacroActionExecutor
             Arguments = $"\"{path}\"",
             UseShellExecute = true,
         };
-        _ = Process.Start(psi);
-        return Task.FromResult(new MacroActionResult(true, false, "Explorer opened."));
+        return Task.FromResult(StartProcess(psi, "Explorer opened."));
     }
 
     private static async Task<MacroActionResult> WriteFileAsync(MacroActionRequest request, CancellationToken cancellationToken)
@@ -221,5 +219,28 @@ public sealed class MacroActionExecutor : IMacroActionExecutor
                 success,
                 message),
             cancellationToken);
+    }
+
+    private static MacroActionResult StartProcess(ProcessStartInfo psi, string successMessage)
+    {
+        try
+        {
+            var process = Process.Start(psi);
+            return process is not null
+                ? new MacroActionResult(true, false, successMessage)
+                : new MacroActionResult(false, false, "Failed to start process.");
+        }
+        catch (Win32Exception ex)
+        {
+            return new MacroActionResult(false, false, ex.Message);
+        }
+        catch (ObjectDisposedException ex)
+        {
+            return new MacroActionResult(false, false, ex.Message);
+        }
+        catch (PlatformNotSupportedException ex)
+        {
+            return new MacroActionResult(false, false, ex.Message);
+        }
     }
 }

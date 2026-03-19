@@ -65,6 +65,13 @@ public static class AppRuntimeService
                         {
                             disposableProvider.Dispose();
                         }
+
+                        lock (HotkeyRunnerSync)
+                        {
+                            _hotkeyRunnerTask = null;
+                            _hotkeyRunnerCts?.Dispose();
+                            _hotkeyRunnerCts = null;
+                        }
                     }
                 },
                 _hotkeyRunnerCts.Token);
@@ -74,6 +81,12 @@ public static class AppRuntimeService
                 try
                 {
                     _hotkeyRunnerCts?.Cancel();
+                    _hotkeyRunnerTask?.Wait(TimeSpan.FromMilliseconds(500));
+                    if (RuntimeContext is IDisposable disposableRuntime)
+                    {
+                        disposableRuntime.Dispose();
+                        RuntimeContext = null;
+                    }
                 }
                 catch
                 {

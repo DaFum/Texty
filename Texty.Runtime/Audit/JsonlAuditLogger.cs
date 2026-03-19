@@ -4,10 +4,12 @@ using Texty.Core.Models;
 
 namespace Texty.Runtime.Audit;
 
-public sealed class JsonlAuditLogger : IAuditLogger
+public sealed class JsonlAuditLogger : IAuditLogger, IDisposable
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = false };
     private readonly string _directory;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private bool _disposed;
 
     public JsonlAuditLogger(string rootDirectory)
     {
@@ -17,11 +19,9 @@ public sealed class JsonlAuditLogger : IAuditLogger
 
     public async Task WriteAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)
     {
+        ThrowIfDisposed();
         var path = GetPath(entry.TimestampUtc);
-        var line = JsonSerializer.Serialize(
-                       entry,
-                       new JsonSerializerOptions { WriteIndented = false }) +
-                   Environment.NewLine;
+        var line = JsonSerializer.Serialize(entry, SerializerOptions) + Environment.NewLine;
 
         await _gate.WaitAsync(cancellationToken);
         try
@@ -34,9 +34,29 @@ public sealed class JsonlAuditLogger : IAuditLogger
         }
     }
 
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _gate.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     private string GetPath(DateTimeOffset timestampUtc)
     {
         var fileName = $"audit-{timestampUtc:yyyy-MM-dd}.jsonl";
         return Path.Combine(_directory, fileName);
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(JsonlAuditLogger));
+        }
     }
 }

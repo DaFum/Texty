@@ -73,9 +73,11 @@ public sealed class WindowsKeystrokeEmitter : IKeystrokeEmitter
         }
 
         var sent = SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
-        if (sent == 0)
+        if (sent != (uint)inputs.Count)
         {
-            throw new InvalidOperationException("Failed to send keyboard input.");
+            var error = Marshal.GetLastWin32Error();
+            throw new InvalidOperationException(
+                $"Failed to send keyboard input. Expected {inputs.Count}, sent {sent}, Win32Error={error}.");
         }
 
         return Task.CompletedTask;
@@ -146,7 +148,7 @@ public sealed class WindowsKeystrokeEmitter : IKeystrokeEmitter
                     wScan = 0,
                     dwFlags = keyUp ? 0x0002u : 0u,
                     time = 0,
-                    dwExtraInfo = IntPtr.Zero,
+                    dwExtraInfo = UIntPtr.Zero,
                 },
             },
         };
@@ -176,6 +178,6 @@ public sealed class WindowsKeystrokeEmitter : IKeystrokeEmitter
         public ushort wScan;
         public uint dwFlags;
         public uint time;
-        public IntPtr dwExtraInfo;
+        public UIntPtr dwExtraInfo;
     }
 }

@@ -29,13 +29,13 @@ public sealed class OutlookAddinBridge
         string? lastName,
         string? company)
     {
-        return new OutlookRecipientContext(
-            displayName?.Trim(),
-            emailAddress?.Trim(),
-            explicitGender?.Trim(),
-            firstName?.Trim(),
-            lastName?.Trim(),
-            company?.Trim());
+        return OutlookVstoRecipientMapper.FromInteropValues(
+            displayName,
+            emailAddress,
+            explicitGender,
+            firstName,
+            lastName,
+            company);
     }
 
     private static string? ResolveLastName(string? lastName, OutlookRecipientContext? recipient)
@@ -47,7 +47,7 @@ public sealed class OutlookAddinBridge
 
         if (!string.IsNullOrWhiteSpace(recipient?.LastName))
         {
-            return recipient.LastName.Trim();
+            return recipient.LastName?.Trim();
         }
 
         return null;

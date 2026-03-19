@@ -138,9 +138,9 @@ public partial class ThisAddIn
                 recipient = mailItem.Recipients[1];
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // ignored
+            Trace.TraceWarning($"Failed to resolve first recipient: {ex.Message}");
         }
 
         var displayName = SafeGet(() => recipient?.Name);
@@ -158,7 +158,19 @@ public partial class ThisAddIn
             return null;
         }
 
-        var parts = displayName.Split([' ', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var normalized = displayName.Trim();
+        if (normalized.Contains(',', StringComparison.Ordinal))
+        {
+            var commaParts = normalized.Split(',', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (commaParts.Length == 2)
+            {
+                var firstPart = commaParts[1]
+                    .Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                return firstPart.Length == 0 ? null : firstPart[0];
+            }
+        }
+
+        var parts = normalized.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 0 ? null : parts[0];
     }
 
@@ -169,7 +181,14 @@ public partial class ThisAddIn
             return null;
         }
 
-        var parts = displayName.Split([' ', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var normalized = displayName.Trim();
+        if (normalized.Contains(',', StringComparison.Ordinal))
+        {
+            var commaParts = normalized.Split(',', 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            return commaParts.Length == 0 ? null : commaParts[0];
+        }
+
+        var parts = normalized.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return parts.Length < 2 ? null : parts[^1];
     }
 
@@ -179,8 +198,9 @@ public partial class ThisAddIn
         {
             return accessor();
         }
-        catch
+        catch (Exception ex)
         {
+            Trace.TraceWarning($"SafeGet failed: {ex.Message}");
             return null;
         }
     }

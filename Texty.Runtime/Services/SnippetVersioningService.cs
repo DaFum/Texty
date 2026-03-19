@@ -4,7 +4,7 @@ using Texty.Core.Models;
 
 namespace Texty.Runtime.Services;
 
-public sealed class SnippetVersioningService
+public sealed class SnippetVersioningService : ISnippetVersioningService
 {
     private readonly ISnippetRepository _snippetRepository;
     private readonly IVersionRepository _versionRepository;

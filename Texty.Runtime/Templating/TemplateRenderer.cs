@@ -9,6 +9,21 @@ namespace Texty.Runtime.Templating;
 public sealed class TemplateRenderer : ITemplateRenderer
 {
     private static readonly Regex PlaceholderRegex = new(@"\{\{\s*(?<key>[a-zA-Z0-9_.-]+)\s*\}\}", RegexOptions.Compiled);
+    private static readonly Regex ScriptRegex = new(
+        @"<\s*script\b[^>]*>[\s\S]*?<\s*/\s*script\s*>",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex DangerousTagRegex = new(
+        @"<\s*(iframe|object|embed|link|meta)\b[^>]*>[\s\S]*?(<\s*/\s*\1\s*>)?",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex InlineEventRegexQuoted = new(
+        @"\s+on\w+\s*=\s*(['""]).*?\1",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex InlineEventRegexBare = new(
+        @"\s+on\w+\s*=\s*[^\s>]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex JavascriptUriRegex = new(
+        @"(?i)\b(href|src)\s*=\s*(['""])\s*javascript:[^'""]*\2",
+        RegexOptions.Compiled);
 
     public Task<TemplateRenderResult> RenderAsync(Snippet snippet, RenderContext context, CancellationToken cancellationToken = default)
     {
@@ -76,12 +91,28 @@ public sealed class TemplateRenderer : ITemplateRenderer
     {
         if (value is TemplateValue templateValue)
         {
-            return templateValue.HtmlText;
+            return SanitizeHtml(templateValue.HtmlText);
         }
 
         var plain = FormatPlainValue(value);
         return System.Net.WebUtility.HtmlEncode(plain)
             .Replace("\r\n", "<br/>", StringComparison.Ordinal)
             .Replace("\n", "<br/>", StringComparison.Ordinal);
+    }
+
+    private static string SanitizeHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = html;
+        cleaned = ScriptRegex.Replace(cleaned, string.Empty);
+        cleaned = DangerousTagRegex.Replace(cleaned, string.Empty);
+        cleaned = InlineEventRegexQuoted.Replace(cleaned, string.Empty);
+        cleaned = InlineEventRegexBare.Replace(cleaned, string.Empty);
+        cleaned = JavascriptUriRegex.Replace(cleaned, "$1=\"#\"");
+        return cleaned;
     }
 }

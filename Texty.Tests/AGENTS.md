@@ -11,6 +11,7 @@ Dotnet usage
 Quick commands
 - **Run all tests:** `& $dotnet test Texty.Tests/Texty.Tests.csproj -m:1`
 - **Build tests only:** `& $dotnet build Texty.Tests/Texty.Tests.csproj -m:1`
+- Note: `-m:1` is intentional to keep test runs deterministic on this workspace.
 
 When to update
 - Update when test project layout, test targets, or CI commands change.

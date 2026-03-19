@@ -357,8 +357,7 @@ public partial class MainViewModel : BaseViewModel
         }
 
         var entry = new TrashEntry(Guid.NewGuid(), SelectedSnippet.Source, DateTimeOffset.UtcNow, Environment.UserName);
-        await _runtime.TrashRepository.MoveToTrashAsync(entry);
-        await _runtime.SnippetWorkflowService.DeleteAsync(SelectedSnippet.Id);
+        await _runtime.SnippetWorkflowService.MoveToTrashAsync(entry);
         StatusText = "Baustein in Papierkorb verschoben.";
         await LoadSnippetsAsync();
     }

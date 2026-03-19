@@ -1,6 +1,7 @@
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
 using Texty.Runtime.Audit;
+using System.Runtime.ExceptionServices;
 
 namespace Texty.Runtime.Insertion;
 
@@ -31,6 +32,7 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
         var results = new List<InsertionStepResult>();
         ClipboardItem? snapshot = null;
         var correlationId = CreateCorrelationId(context);
+        ExceptionDispatchInfo? capturedException = null;
 
         if (!CanInsertIntoTarget(context.TargetProcess))
         {
@@ -98,7 +100,7 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
                     false,
                     "Insertion canceled."),
                 CancellationToken.None);
-            throw;
+            capturedException = ExceptionDispatchInfo.Capture(new OperationCanceledException(cancellationToken));
         }
         catch (Exception ex)
         {
@@ -114,51 +116,54 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
                     ex.Message),
                 cancellationToken);
         }
-        finally
+
+        try
         {
-            try
-            {
-                await _clipboardGateway.RestoreAsync(snapshot, cancellationToken);
-                results.Add(new InsertionStepResult(InsertionStep.Restore, true, "Clipboard restored."));
-                await _auditLogger.WriteAsync(
-                    new AuditLogEntry(
-                        DateTimeOffset.UtcNow,
-                        AuditCategory.Insertion,
-                        "restore",
-                        AuditDecision.Allow,
-                        correlationId,
-                        true,
-                        "Clipboard restored."),
-                    cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                await _auditLogger.WriteAsync(
-                    new AuditLogEntry(
-                        DateTimeOffset.UtcNow,
-                        AuditCategory.Insertion,
-                        "restore",
-                        AuditDecision.Error,
-                        correlationId,
-                        false,
-                        "Restore canceled."),
-                    CancellationToken.None);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                results.Add(new InsertionStepResult(InsertionStep.Restore, false, ex.Message));
-                await _auditLogger.WriteAsync(
-                    new AuditLogEntry(
-                        DateTimeOffset.UtcNow,
-                        AuditCategory.Insertion,
-                        "restore",
-                        AuditDecision.Error,
-                        correlationId,
-                        false,
-                        ex.Message),
-                    cancellationToken);
-            }
+            await _clipboardGateway.RestoreAsync(snapshot, cancellationToken);
+            results.Add(new InsertionStepResult(InsertionStep.Restore, true, "Clipboard restored."));
+            await _auditLogger.WriteAsync(
+                new AuditLogEntry(
+                    DateTimeOffset.UtcNow,
+                    AuditCategory.Insertion,
+                    "restore",
+                    AuditDecision.Allow,
+                    correlationId,
+                    true,
+                    "Clipboard restored."),
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await _auditLogger.WriteAsync(
+                new AuditLogEntry(
+                    DateTimeOffset.UtcNow,
+                    AuditCategory.Insertion,
+                    "restore",
+                    AuditDecision.Error,
+                    correlationId,
+                    false,
+                    "Restore canceled."),
+                CancellationToken.None);
+            capturedException ??= ExceptionDispatchInfo.Capture(new OperationCanceledException(cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            results.Add(new InsertionStepResult(InsertionStep.Restore, false, ex.Message));
+            await _auditLogger.WriteAsync(
+                new AuditLogEntry(
+                    DateTimeOffset.UtcNow,
+                    AuditCategory.Insertion,
+                    "restore",
+                    AuditDecision.Error,
+                    correlationId,
+                    false,
+                    ex.Message),
+                cancellationToken);
+        }
+
+        if (capturedException is not null)
+        {
+            capturedException.Throw();
         }
 
         var insertSucceeded = results.Any(r => r.Step == InsertionStep.Insert && r.Success);

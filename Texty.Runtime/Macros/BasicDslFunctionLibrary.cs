@@ -6,6 +6,10 @@ namespace Texty.Runtime.Macros;
 
 public sealed class BasicDslFunctionLibrary : IDslFunctionLibrary
 {
+    private const int MaxRegexPatternLength = 512;
+    private const int MaxRegexInputLength = 16_384;
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
     public bool TryInvoke(string functionName, IReadOnlyList<string> args, MacroExecutionContext context, out string? result)
     {
         _ = context;
@@ -34,13 +38,14 @@ public sealed class BasicDslFunctionLibrary : IDslFunctionLibrary
                     int.TryParse(args[2], out var length))
                 {
                     var value = args[0];
-                    if (start < 0 || start >= value.Length)
+                    if (start < 0 || length < 0 || start >= value.Length)
                     {
                         result = string.Empty;
                     }
                     else
                     {
-                        result = value.Substring(start, Math.Min(length, value.Length - start));
+                        var safeLength = Math.Max(0, Math.Min(length, value.Length - start));
+                        result = value.Substring(start, safeLength);
                     }
 
                     return true;
@@ -50,8 +55,26 @@ public sealed class BasicDslFunctionLibrary : IDslFunctionLibrary
             case "regex":
                 if (args.Count >= 2)
                 {
-                    var match = Regex.Match(args[0], args[1]);
-                    result = match.Success ? match.Value : string.Empty;
+                    if (!CanRunRegex(args[0], args[1]))
+                    {
+                        result = string.Empty;
+                        return true;
+                    }
+
+                    try
+                    {
+                        var match = Regex.Match(args[0], args[1], RegexOptions.None, RegexTimeout);
+                        result = match.Success ? match.Value : string.Empty;
+                    }
+                    catch (ArgumentException)
+                    {
+                        result = string.Empty;
+                    }
+                    catch (RegexMatchTimeoutException)
+                    {
+                        result = string.Empty;
+                    }
+
                     return true;
                 }
 
@@ -67,7 +90,25 @@ public sealed class BasicDslFunctionLibrary : IDslFunctionLibrary
             case "regexreplace":
                 if (args.Count >= 3)
                 {
-                    result = Regex.Replace(args[0], args[1], args[2]);
+                    if (!CanRunRegex(args[0], args[1]))
+                    {
+                        result = string.Empty;
+                        return true;
+                    }
+
+                    try
+                    {
+                        result = Regex.Replace(args[0], args[1], args[2], RegexOptions.None, RegexTimeout);
+                    }
+                    catch (ArgumentException)
+                    {
+                        result = string.Empty;
+                    }
+                    catch (RegexMatchTimeoutException)
+                    {
+                        result = string.Empty;
+                    }
+
                     return true;
                 }
 
@@ -102,5 +143,11 @@ public sealed class BasicDslFunctionLibrary : IDslFunctionLibrary
             default:
                 return false;
         }
+    }
+
+    private static bool CanRunRegex(string input, string pattern)
+    {
+        return input.Length <= MaxRegexInputLength &&
+               pattern.Length is > 0 and <= MaxRegexPatternLength;
     }
 }

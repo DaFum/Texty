@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Texty.App.Pages;
 using Microsoft.UI.Xaml.Media;
 
@@ -36,18 +37,19 @@ namespace Texty.App
             catch (Exception ex)
             {
                 Trace.TraceError(ex.ToString());
+                var startupLogPath = WriteStartupExceptionLog(ex);
 #if DEBUG
                 const bool showDiagnostics = true;
 #else
                 const bool showDiagnostics = false;
 #endif
-                window.Content = BuildStartupErrorView(ex, showDiagnostics);
+                window.Content = BuildStartupErrorView(ex, showDiagnostics, startupLogPath);
             }
 
             window.Activate();
         }
 
-        private static UIElement BuildStartupErrorView(Exception ex, bool showDiagnostics)
+        private static UIElement BuildStartupErrorView(Exception ex, bool showDiagnostics, string? startupLogPath)
         {
             var panel = new StackPanel
             {
@@ -76,7 +78,7 @@ namespace Texty.App
                 Header = "Details",
                 Text = showDiagnostics
                     ? ex.ToString()
-                    : "Beim Start ist ein Fehler aufgetreten. Bitte Logs prüfen oder Support kontaktieren.",
+                    : BuildGenericStartupMessage(startupLogPath),
                 IsReadOnly = true,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,
@@ -87,6 +89,44 @@ namespace Texty.App
                 Content = panel,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             };
+        }
+
+        private static string BuildGenericStartupMessage(string? startupLogPath)
+        {
+            const string fallbackMessage = "Beim Start ist ein Fehler aufgetreten. Bitte Logs prüfen oder Support kontaktieren.";
+            if (string.IsNullOrWhiteSpace(startupLogPath))
+            {
+                return fallbackMessage;
+            }
+
+            return $"{fallbackMessage}{Environment.NewLine}Logdatei: {startupLogPath}";
+        }
+
+        private static string? WriteStartupExceptionLog(Exception ex)
+        {
+            try
+            {
+                var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (string.IsNullOrWhiteSpace(localAppData))
+                {
+                    return null;
+                }
+
+                var logsDirectory = Path.Combine(localAppData, "Texty", "Logs");
+                Directory.CreateDirectory(logsDirectory);
+
+                var logPath = Path.Combine(logsDirectory, $"startup-{DateTime.UtcNow:yyyyMMdd}.log");
+                var builder = new StringBuilder();
+                builder.AppendLine($"[{DateTimeOffset.UtcNow:O}] Startup exception");
+                builder.AppendLine(ex.ToString());
+                builder.AppendLine(new string('-', 80));
+                File.AppendAllText(logPath, builder.ToString(), Encoding.UTF8);
+                return logPath;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

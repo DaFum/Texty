@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
 
@@ -6,15 +7,18 @@ namespace Texty.Runtime.Services;
 public sealed class SnippetWorkflowService : ISnippetWorkflowService
 {
     private readonly ISnippetRepository _snippetRepository;
+    private readonly ITrashRepository _trashRepository;
     private readonly ISnippetSearchIndex _searchIndex;
-    private readonly SnippetVersioningService _versioningService;
+    private readonly ISnippetVersioningService _versioningService;
 
     public SnippetWorkflowService(
         ISnippetRepository snippetRepository,
+        ITrashRepository trashRepository,
         ISnippetSearchIndex searchIndex,
-        SnippetVersioningService versioningService)
+        ISnippetVersioningService versioningService)
     {
         _snippetRepository = snippetRepository;
+        _trashRepository = trashRepository;
         _searchIndex = searchIndex;
         _versioningService = versioningService;
     }
@@ -38,8 +42,53 @@ public sealed class SnippetWorkflowService : ISnippetWorkflowService
     public async Task DeleteAsync(Guid snippetId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        var snapshot = await _snippetRepository.GetByIdAsync(snippetId, cancellationToken);
         await _snippetRepository.DeleteAsync(snippetId, cancellationToken);
-        await _searchIndex.RemoveAsync(snippetId, cancellationToken);
+        try
+        {
+            await _searchIndex.RemoveAsync(snippetId, cancellationToken);
+        }
+        catch
+        {
+            if (snapshot is not null)
+            {
+                try
+                {
+                    await _snippetRepository.SaveAsync(snapshot, CancellationToken.None);
+                }
+                catch (Exception rollbackEx)
+                {
+                    Trace.TraceError($"Failed to rollback snippet delete for '{snippetId}': {rollbackEx}");
+                }
+            }
+
+            throw;
+        }
+    }
+
+    public async Task MoveToTrashAsync(TrashEntry entry, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _trashRepository.MoveToTrashAsync(entry, cancellationToken);
+
+        try
+        {
+            await DeleteAsync(entry.Snapshot.Id, cancellationToken);
+        }
+        catch
+        {
+            try
+            {
+                await _trashRepository.RemoveAsync(entry.Id, CancellationToken.None);
+            }
+            catch (Exception rollbackEx)
+            {
+                Trace.TraceError($"Failed to rollback trash entry '{entry.Id}': {rollbackEx}");
+            }
+
+            throw;
+        }
     }
 
     public async Task<Snippet?> RestoreAsync(Snippet snapshot, CancellationToken cancellationToken = default)
@@ -58,6 +107,11 @@ public sealed class SnippetWorkflowService : ISnippetWorkflowService
     public async Task<Snippet?> RollbackToVersionAsync(Guid snippetId, VersionEntry version, string? editor, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (version.SnippetId != snippetId)
+        {
+            throw new ArgumentException("Version entry does not match requested snippet id.", nameof(version));
+        }
+
         var current = await _snippetRepository.GetByIdAsync(snippetId, cancellationToken);
         if (current is null)
         {

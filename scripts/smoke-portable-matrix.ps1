@@ -22,10 +22,12 @@ $hostArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.
 $rids = $RuntimeIdentifiers
 $results = New-Object System.Collections.Generic.List[object]
 
-function Can-RunRid([string]$rid, [string]$architecture) {
+function Test-CanRunRid([string]$rid, [string]$architecture) {
     if ($rid -like "*arm64") {
         return $architecture -eq "arm64"
     }
+
+    # x86/x64 builds may run on ARM64 only when Windows-on-ARM emulation is available.
     return $true
 }
 
@@ -48,7 +50,7 @@ foreach ($rid in $rids) {
         continue
     }
 
-    if (-not (Can-RunRid $rid $hostArch)) {
+    if (-not (Test-CanRunRid $rid $hostArch)) {
         $entry.smoke = "skipped"
         $entry.reason = "host architecture '$hostArch' cannot execute '$rid'."
         $results.Add([pscustomobject]$entry)
@@ -99,12 +101,12 @@ foreach ($rid in $rids) {
         $entry.reason = "smoke run failed: $($_.Exception.Message)"
     }
     finally {
-        if ($process -ne $null -and -not $process.HasExited) {
+        if ($null -ne $process -and -not $process.HasExited) {
             try {
                 Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             }
             catch {
-                # Ignore cleanup failures.
+                # Intentionally ignoring cleanup failures; process may already be gone.
             }
         }
     }

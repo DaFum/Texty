@@ -13,7 +13,7 @@ Quick commands
 - **Build AI only:** `& $dotnet build Texty.AI/Texty.AI.csproj -m:1`
 
 Key locations
-- AI adapters: [Texty.AI](.)
+- AI providers: [Providers](Providers/)
 
 When to update
 - Update when AI provider interfaces, credentials handling, or adapter conventions change.

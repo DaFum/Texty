@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace Texty.Runtime.Insertion;
@@ -29,8 +30,19 @@ public sealed class WindowsForegroundProcessProvider : IForegroundProcessProvide
             using var process = Process.GetProcessById((int)processId);
             return process.ProcessName + ".exe";
         }
-        catch
+        catch (ArgumentException ex)
         {
+            Trace.TraceWarning($"Foreground process lookup failed (invalid pid {processId}): {ex.Message}");
+            return null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Trace.TraceWarning($"Foreground process lookup failed (terminated pid {processId}): {ex.Message}");
+            return null;
+        }
+        catch (Win32Exception ex)
+        {
+            Trace.TraceWarning($"Foreground process lookup failed (win32 pid {processId}): {ex.Message}");
             return null;
         }
     }

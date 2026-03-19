@@ -21,6 +21,11 @@ namespace Texty.Runtime.Bootstrap;
 
 public static class TextyRuntimeBootstrap
 {
+    private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+    });
+
     public static async Task<TextyRuntimeContext> CreateDefaultAsync(string? storageRoot = null, CancellationToken cancellationToken = default)
     {
         var root = storageRoot ??
@@ -82,7 +87,7 @@ public static class TextyRuntimeBootstrap
         };
         var resolverFactory = new CompositeExternalDataResolverFactory(resolvers);
 
-        var httpClient = new HttpClient();
+        var httpClient = SharedHttpClient;
         IAiProvider openAi = new OpenAiProvider(httpClient);
         IAiProvider openRouter = new OpenRouterProvider(httpClient);
         IAiProvider groq = new GroqProvider(httpClient);
@@ -106,9 +111,10 @@ public static class TextyRuntimeBootstrap
         var sync = new FolderSyncOrchestrator();
 
         var maintenance = new SnippetMaintenanceService(snippetRepository, searchIndex);
-        var snippetVersioning = new SnippetVersioningService(snippetRepository, versionRepository);
+        ISnippetVersioningService snippetVersioning = new SnippetVersioningService(snippetRepository, versionRepository);
         ISnippetWorkflowService snippetWorkflow = new SnippetWorkflowService(
             snippetRepository,
+            trashRepository,
             searchIndex,
             snippetVersioning);
         var docGenerator = new DocumentGeneratorService();
@@ -119,6 +125,7 @@ public static class TextyRuntimeBootstrap
             snippetRepository,
             triggerProvider,
             triggerEvaluator,
+            templateRenderer,
             insertionPipeline,
             productivityStats);
         var importService = new FileImportService(snippetRepository, DefaultFolderId, jsonOptions.AssetsDirectory, auditLogger);

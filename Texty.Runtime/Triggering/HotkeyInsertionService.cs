@@ -6,22 +6,29 @@ namespace Texty.Runtime.Triggering;
 
 public sealed class HotkeyInsertionService
 {
+    private static readonly TimeSpan SnippetCacheDuration = TimeSpan.FromSeconds(5);
+
     private readonly ISnippetRepository _snippetRepository;
     private readonly ITriggerProvider _triggerProvider;
     private readonly ITriggerEvaluator _triggerEvaluator;
+    private readonly ITemplateRenderer _templateRenderer;
     private readonly IInsertionPipeline _insertionPipeline;
     private readonly Services.ProductivityStatsService? _productivityStatsService;
+    private IReadOnlyList<Snippet>? _cachedSnippets;
+    private DateTimeOffset _cachedSnippetsAt;
 
     public HotkeyInsertionService(
         ISnippetRepository snippetRepository,
         ITriggerProvider triggerProvider,
         ITriggerEvaluator triggerEvaluator,
+        ITemplateRenderer templateRenderer,
         IInsertionPipeline insertionPipeline,
         Services.ProductivityStatsService? productivityStatsService = null)
     {
         _snippetRepository = snippetRepository;
         _triggerProvider = triggerProvider;
         _triggerEvaluator = triggerEvaluator;
+        _templateRenderer = templateRenderer;
         _insertionPipeline = insertionPipeline;
         _productivityStatsService = productivityStatsService;
     }
@@ -47,7 +54,7 @@ public sealed class HotkeyInsertionService
 
     private async Task HandleSignalAsync(TriggerSignal signal, CancellationToken cancellationToken)
     {
-        var snippets = await _snippetRepository.GetAllAsync(cancellationToken);
+        var snippets = await GetSnippetsCachedAsync(cancellationToken);
         var snippetByRuleId = new Dictionary<Guid, Snippet>();
         var rules = new List<TriggerRule>();
 
@@ -72,7 +79,21 @@ public sealed class HotkeyInsertionService
             return;
         }
 
-        var payload = new InsertionPayload(snippet.PlainText, snippet.HtmlText, []);
+        TemplateRenderResult renderResult;
+        try
+        {
+            renderResult = await _templateRenderer.RenderAsync(
+                snippet,
+                BuildRenderContext(signal, match),
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Trace.TraceWarning($"Template render failed for snippet '{snippet.Id}': {ex.Message}");
+            renderResult = new TemplateRenderResult(snippet.PlainText, snippet.HtmlText);
+        }
+
+        var payload = new InsertionPayload(renderResult.PlainText, renderResult.HtmlText, []);
         var insertionContext = new InsertionContext(
             match.Rule.TargetProcess,
             signal.Scope == TriggerScope.Email,
@@ -84,5 +105,32 @@ public sealed class HotkeyInsertionService
         {
             _productivityStatsService?.TrackInsertion();
         }
+    }
+
+    private async Task<IReadOnlyList<Snippet>> GetSnippetsCachedAsync(CancellationToken cancellationToken)
+    {
+        if (_cachedSnippets is not null &&
+            DateTimeOffset.UtcNow - _cachedSnippetsAt < SnippetCacheDuration)
+        {
+            return _cachedSnippets;
+        }
+
+        var snippets = await _snippetRepository.GetAllAsync(cancellationToken);
+        _cachedSnippets = snippets;
+        _cachedSnippetsAt = DateTimeOffset.UtcNow;
+        return snippets;
+    }
+
+    private static RenderContext BuildRenderContext(TriggerSignal signal, TriggerMatch match)
+    {
+        var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["trigger.input"] = signal.Input,
+            ["trigger.process"] = signal.ProcessName ?? string.Empty,
+            ["trigger.scope"] = signal.Scope.ToString(),
+            ["trigger.type"] = signal.Type.ToString(),
+            ["trigger.pattern"] = match.Rule.Pattern,
+        };
+        return new RenderContext(values);
     }
 }
