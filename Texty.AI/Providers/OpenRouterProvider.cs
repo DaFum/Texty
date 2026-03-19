@@ -9,7 +9,7 @@ public sealed class OpenRouterProvider : ApiKeyHttpAiProvider
 
     public override string Name => "OpenRouter";
 
-    protected override string DefaultModel => "openai/gpt-4.1-mini";
+    protected override string DefaultModel => "openai/gpt-4o-mini";
 
     protected override IDictionary<string, string> BuildHeaders(string apiKey)
     {

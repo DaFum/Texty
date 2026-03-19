@@ -16,10 +16,22 @@ $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 $projectPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\Texty.App\Texty.App.csproj"))
 $dotnetUser = Join-Path $env:USERPROFILE ".dotnet\dotnet.exe"
 $dotnet = if (Test-Path $dotnetUser) { $dotnetUser } else { "dotnet" }
+$rid = $RuntimeIdentifier.ToLowerInvariant()
+
+$platform = switch ($rid) {
+    "win-x64" { "x64" }
+    "win10-x64" { "x64" }
+    "win-x86" { "x86" }
+    "win10-x86" { "x86" }
+    "win-arm64" { "ARM64" }
+    "win10-arm64" { "ARM64" }
+    default { throw "Unsupported RuntimeIdentifier '$RuntimeIdentifier'. Supported: win-x86, win-x64, win-arm64." }
+}
 
 Write-Host "Publishing portable build..."
 Write-Host "Project : $projectPath"
 Write-Host "Runtime : $RuntimeIdentifier"
+Write-Host "Platform: $platform"
 Write-Host "Config  : $Configuration"
 Write-Host "Output  : $OutputDirectory"
 
@@ -36,7 +48,7 @@ if ($KillRunningTexty) {
     -p:PublishTrimmed=false `
     -p:PublishReadyToRun=false `
     -p:PublishSingleFile=false `
-    -p:Platform=x64 `
+    -p:Platform=$platform `
     -o $OutputDirectory
 
 if ($LASTEXITCODE -ne 0) {

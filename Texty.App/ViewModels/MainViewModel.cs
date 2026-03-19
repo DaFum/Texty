@@ -193,7 +193,7 @@ public partial class MainViewModel : BaseViewModel
 
     partial void OnSelectedFolderChanged(FolderItemModel? value)
     {
-        _ = LoadSnippetsAsync();
+        _ = LoadSnippetsSafelyAsync();
     }
 
     partial void OnSelectedSnippetChanged(SnippetItemModel? value)
@@ -265,6 +265,18 @@ public partial class MainViewModel : BaseViewModel
 
         var stats = _runtime.ProductivityStatsService.Snapshot();
         StatusText = $"Bausteine: {VisibleSnippets.Count} | Insertions: {stats.Insertions}";
+    }
+
+    private async Task LoadSnippetsSafelyAsync()
+    {
+        try
+        {
+            await LoadSnippetsAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Fehler beim Laden der Bausteine: {ex.Message}";
+        }
     }
 
     private static Windows.UI.Color ParseColor(string? colorHex)
