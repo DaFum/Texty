@@ -8,6 +8,11 @@ public interface IAiProvider
     Task<AiResponse> GenerateAsync(AiRequest request, CancellationToken cancellationToken = default);
 }
 
+public interface IAiHealthCheckProvider
+{
+    Task<AiProviderHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default);
+}
+
 public interface ITranslationProvider
 {
     string Name { get; }

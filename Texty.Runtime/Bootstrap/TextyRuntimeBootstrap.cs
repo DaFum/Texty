@@ -92,7 +92,11 @@ public static class TextyRuntimeBootstrap
         IAiProvider openRouter = new OpenRouterProvider(httpClient);
         IAiProvider groq = new GroqProvider(httpClient);
         IAiProvider langdock = new LangdockProvider(httpClient);
-        var aiRegistry = new AiProviderRegistry([openAi, openRouter, groq, langdock]);
+        IAiProvider anthropic = new AnthropicProvider(httpClient);
+        IAiProvider ollama = new OllamaProvider(httpClient);
+        IAiProvider gpt4All = new Gpt4AllProvider(httpClient);
+        var aiRegistry = new AiProviderRegistry([openAi, openRouter, groq, langdock, anthropic, ollama, gpt4All]);
+        var aiHealthService = new AiProviderHealthService(aiRegistry);
 
         ITranslationProvider openAiTranslation = new OpenAiTranslationProvider(openAi);
         var translationRegistry = new TranslationProviderRegistry([openAiTranslation]);
@@ -148,6 +152,7 @@ public static class TextyRuntimeBootstrap
             openAi,
             openAiTranslation,
             aiRegistry,
+            aiHealthService,
             translationRegistry,
             macroEngine,
             macroActionExecutor,

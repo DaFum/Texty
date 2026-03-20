@@ -11,7 +11,7 @@ public sealed class OpenRouterProvider : ApiKeyHttpAiProvider
 
     protected override string DefaultModel => "openai/gpt-4o-mini";
 
-    protected override IDictionary<string, string> BuildHeaders(string apiKey)
+    protected override IDictionary<string, string> BuildHeaders(string? apiKey)
     {
         var headers = base.BuildHeaders(apiKey);
         headers["HTTP-Referer"] = "https://texty.local";

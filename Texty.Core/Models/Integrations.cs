@@ -14,6 +14,11 @@ public sealed record AiResponse(
     string Text,
     IReadOnlyDictionary<string, string>? Metadata = null);
 
+public sealed record AiProviderHealthResult(
+    string Provider,
+    bool Available,
+    string Message);
+
 public sealed record TranslationRequest(
     string Text,
     string SourceLanguage,

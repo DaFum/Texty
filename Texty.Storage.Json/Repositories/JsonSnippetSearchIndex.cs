@@ -83,6 +83,15 @@ public sealed class JsonSnippetSearchIndex : ISnippetSearchIndex
             source = source.Where(s => s.Tags.Any(t => string.Equals(t.Value, query.Tag, StringComparison.OrdinalIgnoreCase)));
         }
 
+        if (!string.IsNullOrWhiteSpace(query.TargetProcess))
+        {
+            source = source.Where(s =>
+                s.Triggers.Any(t =>
+                    t.Enabled &&
+                    !string.IsNullOrWhiteSpace(t.TargetProcess) &&
+                    string.Equals(NormalizeProcessName(t.TargetProcess), NormalizeProcessName(query.TargetProcess), StringComparison.OrdinalIgnoreCase)));
+        }
+
         return source
             .Select(s => new SnippetSearchResult(s, Score(query.Term, s)))
             .Where(r => r.Score > 0)
@@ -122,5 +131,18 @@ public sealed class JsonSnippetSearchIndex : ISnippetSearchIndex
         }
 
         return score;
+    }
+
+    private static string NormalizeProcessName(string? processName)
+    {
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return string.Empty;
+        }
+
+        var value = processName.Trim();
+        return value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? value[..^4]
+            : value;
     }
 }

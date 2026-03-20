@@ -24,6 +24,7 @@ public sealed record TextyRuntimeContext(
     IAiProvider DefaultAiProvider,
     ITranslationProvider DefaultTranslationProvider,
     AiProviderRegistry AiProviders,
+    AiProviderHealthService AiProviderHealthService,
     TranslationProviderRegistry TranslationProviders,
     IMacroEngine MacroEngine,
     IMacroActionExecutor MacroActionExecutor,
@@ -81,6 +82,7 @@ public sealed record TextyRuntimeContext(
         yield return DefaultAiProvider;
         yield return DefaultTranslationProvider;
         yield return AiProviders;
+        yield return AiProviderHealthService;
         yield return TranslationProviders;
         yield return MacroEngine;
         yield return MacroActionExecutor;

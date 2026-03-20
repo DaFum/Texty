@@ -3,7 +3,8 @@ namespace Texty.Core.Models;
 public sealed record InsertionPayload(
     string PlainText,
     string? HtmlText,
-    IReadOnlyList<string> PostActions);
+    IReadOnlyList<string> PostActions,
+    byte[]? ImageBytes = null);
 
 public sealed record InsertionContext(
     string? TargetProcess,

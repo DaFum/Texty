@@ -48,6 +48,11 @@ public sealed class SqlServerSnippetRepository : ISnippetRepository
             .Where(s => query.IncludeHidden || s.HighlightMode != SnippetHighlightMode.Hidden)
             .Where(s => query.FolderId is null || s.FolderId == query.FolderId.Value)
             .Where(s => string.IsNullOrWhiteSpace(query.Tag) || s.Tags.Any(t => string.Equals(t.Value, query.Tag, StringComparison.OrdinalIgnoreCase)))
+            .Where(s => string.IsNullOrWhiteSpace(query.TargetProcess) ||
+                        s.Triggers.Any(t =>
+                            t.Enabled &&
+                            !string.IsNullOrWhiteSpace(t.TargetProcess) &&
+                            string.Equals(NormalizeProcessName(t.TargetProcess), NormalizeProcessName(query.TargetProcess), StringComparison.OrdinalIgnoreCase)))
             .Select(s => new SnippetSearchResult(s, Score(query.Term, s)))
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
@@ -88,5 +93,18 @@ public sealed class SqlServerSnippetRepository : ISnippetRepository
         }
 
         return score;
+    }
+
+    private static string NormalizeProcessName(string? processName)
+    {
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return string.Empty;
+        }
+
+        var value = processName.Trim();
+        return value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? value[..^4]
+            : value;
     }
 }

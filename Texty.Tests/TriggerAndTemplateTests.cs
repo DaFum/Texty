@@ -1,4 +1,5 @@
 using Texty.Core.Models;
+using Texty.Core.Utilities;
 using Texty.Runtime.Templating;
 using Texty.Runtime.Triggering;
 
@@ -44,6 +45,36 @@ public sealed class TriggerAndTemplateTests
 
         Assert.Single(matches);
         Assert.Equal(rule.Id, matches[0].Rule.Id);
+    }
+
+    [Fact]
+    public async Task TriggerEvaluator_ShouldMatchHotkeyRule_WithLocalizedSynonymsAndOrder()
+    {
+        var evaluator = new TriggerEvaluator();
+        var rule = new TriggerRule(
+            Guid.NewGuid(),
+            TriggerType.Hotkey,
+            "Strg + Alt + y",
+            false,
+            TriggerScope.Any,
+            null,
+            true);
+
+        var signal = new TriggerSignal(TriggerType.Hotkey, "ALT+CTRL+Y", "notepad.exe", TriggerScope.Any);
+        var matches = await evaluator.EvaluateAsync([rule], signal);
+
+        Assert.Single(matches);
+        Assert.Equal(rule.Id, matches[0].Rule.Id);
+    }
+
+    [Theory]
+    [InlineData("Strg + Alt + y", "CTRL+ALT+Y")]
+    [InlineData("alt+ctrl+f12", "CTRL+ALT+F12")]
+    [InlineData("  SHIFT + win + a ", "SHIFT+WIN+A")]
+    public void HotkeyComboNormalizer_ShouldCanonicalize(string raw, string expected)
+    {
+        var normalized = HotkeyComboNormalizer.Normalize(raw);
+        Assert.Equal(expected, normalized);
     }
 
     [Fact]

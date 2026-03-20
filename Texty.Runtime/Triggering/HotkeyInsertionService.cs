@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
 
@@ -7,6 +8,7 @@ namespace Texty.Runtime.Triggering;
 public sealed class HotkeyInsertionService
 {
     private static readonly TimeSpan SnippetCacheDuration = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan HotkeyReleaseTimeout = TimeSpan.FromMilliseconds(350);
 
     private readonly ISnippetRepository _snippetRepository;
     private readonly ITriggerProvider _triggerProvider;
@@ -100,6 +102,7 @@ public sealed class HotkeyInsertionService
             signal.Scope == TriggerScope.TextFile,
             null);
 
+        await WaitForHotkeyModifiersReleasedAsync(signal, cancellationToken);
         var results = await _insertionPipeline.ExecuteAsync(payload, insertionContext, cancellationToken);
         if (results.Any(r => r.Step == InsertionStep.Insert && r.Success))
         {
@@ -132,5 +135,53 @@ public sealed class HotkeyInsertionService
             ["trigger.pattern"] = match.Rule.Pattern,
         };
         return new RenderContext(values);
+    }
+
+    private static async Task WaitForHotkeyModifiersReleasedAsync(TriggerSignal signal, CancellationToken cancellationToken)
+    {
+        if (signal.Type != TriggerType.Hotkey || !OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var requiresCtrl = signal.Input.Contains("CTRL", StringComparison.OrdinalIgnoreCase);
+        var requiresShift = signal.Input.Contains("SHIFT", StringComparison.OrdinalIgnoreCase);
+        var requiresAlt = signal.Input.Contains("ALT", StringComparison.OrdinalIgnoreCase);
+        var requiresWin = signal.Input.Contains("WIN", StringComparison.OrdinalIgnoreCase);
+        if (!requiresCtrl && !requiresShift && !requiresAlt && !requiresWin)
+        {
+            return;
+        }
+
+        var started = DateTime.UtcNow;
+        while (DateTime.UtcNow - started < HotkeyReleaseTimeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var ctrlPressed = requiresCtrl && IsPressed(VkControl);
+            var shiftPressed = requiresShift && IsPressed(VkShift);
+            var altPressed = requiresAlt && IsPressed(VkMenu);
+            var winPressed = requiresWin && (IsPressed(VkLWin) || IsPressed(VkRWin));
+            if (!ctrlPressed && !shiftPressed && !altPressed && !winPressed)
+            {
+                return;
+            }
+
+            await Task.Delay(10, cancellationToken);
+        }
+    }
+
+    private const int VkShift = 0x10;
+    private const int VkControl = 0x11;
+    private const int VkMenu = 0x12;
+    private const int VkLWin = 0x5B;
+    private const int VkRWin = 0x5C;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    private static bool IsPressed(int virtualKey)
+    {
+        return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
     }
 }

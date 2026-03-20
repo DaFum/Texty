@@ -7,6 +7,8 @@ namespace Texty.Runtime.Insertion;
 
 public sealed class ClipboardInsertionPipeline : IInsertionPipeline
 {
+    private static readonly TimeSpan PasteSettleDelay = TimeSpan.FromMilliseconds(75);
+
     private readonly IClipboardGateway _clipboardGateway;
     private readonly IKeystrokeEmitter _keystrokeEmitter;
     private readonly IForegroundProcessProvider? _foregroundProcessProvider;
@@ -74,8 +76,9 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
                     "Clipboard snapshot captured."),
                 cancellationToken);
 
-            await _clipboardGateway.SetAsync(new ClipboardItem(payload.PlainText, payload.HtmlText, null), cancellationToken);
+            await _clipboardGateway.SetAsync(new ClipboardItem(payload.PlainText, payload.HtmlText, payload.ImageBytes), cancellationToken);
             await _keystrokeEmitter.SendPasteAsync(cancellationToken);
+            await Task.Delay(PasteSettleDelay, cancellationToken);
             results.Add(new InsertionStepResult(InsertionStep.Insert, true, "Paste command emitted."));
             await _auditLogger.WriteAsync(
                 new AuditLogEntry(

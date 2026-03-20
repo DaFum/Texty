@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
 using Texty.App.ViewModels;
+using Texty.App.ViewModels.Models;
 using Texty.Core.Models;
 
 namespace Texty.App.Pages;
@@ -22,9 +23,10 @@ public sealed partial class MainPage : Page
     private static readonly Windows.UI.Color AccentTealSoft = Microsoft.UI.ColorHelper.FromArgb(255, 34, 170, 165);
     private static readonly Windows.UI.Color AccentCopper = Microsoft.UI.ColorHelper.FromArgb(255, 176, 102, 49);
     private static readonly Windows.UI.Color InkDeep = Microsoft.UI.ColorHelper.FromArgb(255, 18, 42, 54);
-    private static readonly Windows.UI.Color InkStrong = Microsoft.UI.ColorHelper.FromArgb(255, 20, 48, 61);
-    private static readonly Windows.UI.Color InkLabel = Microsoft.UI.ColorHelper.FromArgb(255, 28, 63, 78);
-    private static readonly Windows.UI.Color InkMeta = Microsoft.UI.ColorHelper.FromArgb(255, 40, 78, 92);
+    private static readonly Windows.UI.Color InkStrong = Microsoft.UI.ColorHelper.FromArgb(255, 16, 43, 55);
+    private static readonly Windows.UI.Color InkLabel = Microsoft.UI.ColorHelper.FromArgb(255, 21, 56, 72);
+    private static readonly Windows.UI.Color InkMeta = Microsoft.UI.ColorHelper.FromArgb(255, 22, 61, 77);
+    private static readonly Windows.UI.Color InkSubtle = Microsoft.UI.ColorHelper.FromArgb(255, 31, 72, 88);
     private static readonly Windows.UI.Color PanelDark = Microsoft.UI.ColorHelper.FromArgb(236, 19, 38, 52);
     private static readonly Windows.UI.Color PanelDarkBorder = Microsoft.UI.ColorHelper.FromArgb(110, 96, 169, 184);
     private static readonly Windows.UI.Color PanelLight = Microsoft.UI.ColorHelper.FromArgb(232, 246, 242, 234);
@@ -33,6 +35,9 @@ public sealed partial class MainPage : Page
     private static readonly Windows.UI.Color EditorLightBorder = Microsoft.UI.ColorHelper.FromArgb(90, 83, 123, 139);
     private static readonly Windows.UI.Color TriggerDark = Microsoft.UI.ColorHelper.FromArgb(236, 22, 40, 57);
     private static readonly Windows.UI.Color TriggerDarkBorder = Microsoft.UI.ColorHelper.FromArgb(112, 120, 202, 202);
+    private static readonly Windows.UI.Color CommandSurface = Microsoft.UI.ColorHelper.FromArgb(228, 245, 250, 254);
+    private static readonly Windows.UI.Color CommandSurfaceBorder = Microsoft.UI.ColorHelper.FromArgb(168, 68, 108, 124);
+    private static readonly Windows.UI.Color InputPlaceholder = Microsoft.UI.ColorHelper.FromArgb(255, 49, 87, 103);
 
     private readonly MainViewModel _viewModel = new();
 
@@ -53,6 +58,9 @@ public sealed partial class MainPage : Page
     private StackPanel? _headerRightPanel;
     private ListView? _folderList;
     private ListView? _snippetList;
+    private ListView? _triggerRuleList;
+    private ListView? _versionList;
+    private ListView? _trashList;
     private Grid? _editorSplitGrid;
     private Grid? _productivityGrid;
     private Expander? _insertToolsExpander;
@@ -71,24 +79,14 @@ public sealed partial class MainPage : Page
     private bool _isWebViewInitialized;
     private bool _isEditorDomReady;
     private bool _isUpdatingFromEditor;
-    private bool _toolbarReflowReady;
 
     private bool _hasRunRevealAnimation;
-    private readonly List<AdaptiveToolbarLayout> _adaptiveToolbars = [];
 
     private enum ButtonVisualTier
     {
         Primary,
         Secondary,
         Tertiary,
-    }
-
-    private sealed class AdaptiveToolbarLayout
-    {
-        public required Border Container { get; init; }
-        public required StackPanel RowsHost { get; init; }
-        public required IReadOnlyList<Button> Buttons { get; init; }
-        public double MinRowWidth { get; init; } = 280;
     }
 
     public MainPage()
@@ -126,9 +124,9 @@ public sealed partial class MainPage : Page
         _shellStatusText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(InkLabel),
+            Foreground = new SolidColorBrush(InkStrong),
             FontFamily = BodyFont,
-            FontSize = 13,
+            FontSize = 15,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Right,
             MaxWidth = 460,
@@ -288,7 +286,7 @@ public sealed partial class MainPage : Page
             Text = "Snippet-Orchestrierung fuer Explorer, Editor und Trigger in einem Arbeitsfluss.",
             FontFamily = BodyFont,
             FontSize = 14,
-            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 53, 87, 98)),
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 43, 78, 92)),
         });
         _headerGrid.Children.Add(left);
 
@@ -341,13 +339,72 @@ public sealed partial class MainPage : Page
             DisplayMemberPath = "Name",
             SelectionMode = ListViewSelectionMode.Single,
             Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(35, 223, 242, 247)),
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 236, 247, 250)),
             BorderThickness = new Thickness(0),
             Padding = new Thickness(8),
             CornerRadius = new CornerRadius(16),
         };
+        _folderList.Resources["ListViewItemForeground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 236, 247, 250));
+        _folderList.Resources["ListViewItemForegroundSelected"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 246, 253, 255));
+        _folderList.Resources["ListViewItemBackgroundSelected"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 73, 94, 109));
+        _folderList.Resources["ListViewItemBackgroundSelectedPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 80, 104, 120));
         _folderList.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.Folders)));
         _folderList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedFolder), BindingMode.TwoWay));
         panel.Children.Add(_folderList);
+
+        var folderEditor = new Border
+        {
+            Padding = new Thickness(10, 8, 10, 10),
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(114, 96, 173, 183)),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(60, 24, 74, 93)),
+        };
+        var folderEditorPanel = new StackPanel { Spacing = 6 };
+
+        var folderNameInput = new TextBox
+        {
+            Header = "Ordnername",
+            FontFamily = BodyFont,
+            FontSize = 13,
+            CornerRadius = new CornerRadius(8),
+        };
+        ApplyInputChrome(folderNameInput);
+        folderNameInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.FolderNameInput), BindingMode.TwoWay));
+        folderEditorPanel.Children.Add(folderNameInput);
+
+        var folderColorInput = new TextBox
+        {
+            Header = "Farbe (#RRGGBB)",
+            FontFamily = MonoFont,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+        ApplyInputChrome(folderColorInput);
+        folderColorInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.FolderColorHexInput), BindingMode.TwoWay));
+        folderEditorPanel.Children.Add(folderColorInput);
+
+        var folderButtonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+        };
+        folderButtonRow.Children.Add(MakeCommandButton("Ordner +", nameof(MainViewModel.CreateFolderCommand), ButtonVisualTier.Primary));
+        folderButtonRow.Children.Add(MakeCommandButton("Umben.", nameof(MainViewModel.RenameSelectedFolderCommand), ButtonVisualTier.Secondary));
+        folderButtonRow.Children.Add(MakeCommandButton("Loeschen", nameof(MainViewModel.DeleteSelectedFolderCommand), ButtonVisualTier.Tertiary));
+        folderEditorPanel.Children.Add(folderButtonRow);
+
+        var folderSortRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+        };
+        folderSortRow.Children.Add(MakeCommandButton("Nach oben", nameof(MainViewModel.MoveFolderUpCommand), ButtonVisualTier.Tertiary));
+        folderSortRow.Children.Add(MakeCommandButton("Nach unten", nameof(MainViewModel.MoveFolderDownCommand), ButtonVisualTier.Tertiary));
+        folderEditorPanel.Children.Add(folderSortRow);
+
+        folderEditor.Child = folderEditorPanel;
+        panel.Children.Add(folderEditor);
 
         var createButton = MakeCommandButton("Neuer Baustein", nameof(MainViewModel.CreateSnippetCommand), ButtonVisualTier.Primary);
         createButton.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -378,24 +435,40 @@ public sealed partial class MainPage : Page
 
     private UIElement BuildCenterPane()
     {
-        var panel = new StackPanel
+        var panel = new Grid
         {
-            Spacing = 10,
-            Padding = new Thickness(18, 18, 18, 18),
+            Padding = new Thickness(16, 16, 16, 16),
+            RowSpacing = 8,
         };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        panel.Children.Add(new TextBlock
+        var title = new TextBlock
         {
             Text = "Library",
             FontFamily = DisplayFont,
             FontSize = 24,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Foreground = new SolidColorBrush(InkStrong),
-        });
+        };
+        Grid.SetRow(title, 0);
+        panel.Children.Add(title);
 
-        panel.Children.Add(BuildLibraryCommandBar());
+        var bar = (FrameworkElement)BuildLibraryCommandBar();
+        Grid.SetRow(bar, 1);
+        panel.Children.Add(bar);
 
-        panel.Children.Add(CreateSectionLabel("Suche"));
+        var searchLabel = CreateSectionLabel("Suche");
+        Grid.SetRow(searchLabel, 2);
+        panel.Children.Add(searchLabel);
 
         var searchFrame = new Border
         {
@@ -415,9 +488,12 @@ public sealed partial class MainPage : Page
         ApplyInputChrome(search);
         search.SetBinding(AutoSuggestBox.TextProperty, CreateBinding(nameof(MainViewModel.SearchTerm), BindingMode.TwoWay));
         searchFrame.Child = search;
+        Grid.SetRow(searchFrame, 3);
         panel.Children.Add(searchFrame);
 
-        panel.Children.Add(CreateSectionLabel("Ersetzen (Scope: aktuelle Trefferliste)"));
+        var replaceLabel = CreateSectionLabel("Ersetzen (Scope: aktuelle Trefferliste)");
+        Grid.SetRow(replaceLabel, 4);
+        panel.Children.Add(replaceLabel);
 
         var replaceFrame = new Border
         {
@@ -437,24 +513,587 @@ public sealed partial class MainPage : Page
         ApplyInputChrome(replace);
         replace.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ReplaceTerm), BindingMode.TwoWay));
         replaceFrame.Child = replace;
+        Grid.SetRow(replaceFrame, 5);
         panel.Children.Add(replaceFrame);
+
+        var scopePanel = new Grid
+        {
+            ColumnSpacing = 8,
+            RowSpacing = 6,
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+        scopePanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        scopePanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        scopePanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        scopePanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var tagScopeInput = new TextBox
+        {
+            PlaceholderText = "Scope Tag (optional)",
+            FontFamily = BodyFont,
+            FontSize = 13,
+            CornerRadius = new CornerRadius(10),
+        };
+        ApplyInputChrome(tagScopeInput);
+        tagScopeInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ReplaceScopeTag), BindingMode.TwoWay));
+        scopePanel.Children.Add(tagScopeInput);
+
+        var processScopeInput = new TextBox
+        {
+            PlaceholderText = "Scope Zielprozess (optional)",
+            FontFamily = BodyFont,
+            FontSize = 13,
+            CornerRadius = new CornerRadius(10),
+        };
+        ApplyInputChrome(processScopeInput);
+        processScopeInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ReplaceScopeTargetProcess), BindingMode.TwoWay));
+        Grid.SetColumn(processScopeInput, 1);
+        scopePanel.Children.Add(processScopeInput);
+
+        var folderScopeToggle = new ToggleSwitch
+        {
+            Header = "Ordner-Scope",
+            FontFamily = BodyFont,
+            FontSize = 12,
+        };
+        folderScopeToggle.SetBinding(ToggleSwitch.IsOnProperty, CreateBinding(nameof(MainViewModel.ReplaceScopeUseFolder), BindingMode.TwoWay));
+        Grid.SetRow(folderScopeToggle, 1);
+        scopePanel.Children.Add(folderScopeToggle);
+
+        var selectionScopeWrap = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var selectionScopeToggle = new ToggleSwitch
+        {
+            Header = "Auswahl-Scope",
+            FontFamily = BodyFont,
+            FontSize = 12,
+        };
+        selectionScopeToggle.SetBinding(ToggleSwitch.IsOnProperty, CreateBinding(nameof(MainViewModel.ReplaceScopeUseSelection), BindingMode.TwoWay));
+        selectionScopeWrap.Children.Add(selectionScopeToggle);
+        var includeHiddenToggle = new ToggleSwitch
+        {
+            Header = "Hidden einschliessen",
+            FontFamily = BodyFont,
+            FontSize = 12,
+        };
+        includeHiddenToggle.SetBinding(ToggleSwitch.IsOnProperty, CreateBinding(nameof(MainViewModel.ReplaceScopeIncludeHidden), BindingMode.TwoWay));
+        selectionScopeWrap.Children.Add(includeHiddenToggle);
+        Grid.SetColumn(selectionScopeWrap, 1);
+        Grid.SetRow(selectionScopeWrap, 1);
+        scopePanel.Children.Add(selectionScopeWrap);
+        Grid.SetRow(scopePanel, 6);
+        panel.Children.Add(scopePanel);
+
+        var replaceResult = new TextBlock
+        {
+            FontFamily = BodyFont,
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(InkMeta),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        replaceResult.SetBinding(TextBlock.TextProperty, CreateBinding(nameof(MainViewModel.ReplaceResultText), BindingMode.OneWay));
+        Grid.SetRow(replaceResult, 7);
+        panel.Children.Add(replaceResult);
+
+        var integrationExpander = new Expander
+        {
+            IsExpanded = false,
+            Header = new TextBlock
+            {
+                Text = "Import & Resolver",
+                FontFamily = BodyFont,
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(InkLabel),
+            },
+            BorderBrush = new SolidColorBrush(CommandSurfaceBorder),
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(205, 244, 250, 253)),
+            Content = BuildImportResolverPanel(),
+        };
+        Grid.SetRow(integrationExpander, 8);
+        panel.Children.Add(integrationExpander);
 
         _snippetList = new ListView
         {
             DisplayMemberPath = "Title",
-            MinHeight = 340,
-            MaxHeight = 780,
+            MinHeight = 180,
+            MaxHeight = 1200,
             SelectionMode = ListViewSelectionMode.Single,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(8),
             CornerRadius = new CornerRadius(16),
             Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(196, 245, 252, 255)),
+            Foreground = new SolidColorBrush(InkStrong),
         };
+        _snippetList.Resources["ListViewItemForeground"] = new SolidColorBrush(InkStrong);
+        _snippetList.Resources["ListViewItemForegroundSelected"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 12, 42, 56));
+        _snippetList.Resources["ListViewItemBackgroundSelected"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 210, 236, 246));
+        _snippetList.Resources["ListViewItemBackgroundSelectedPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 201, 230, 241));
+        _snippetList.Resources["ListViewItemBackgroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 226, 244, 250));
         _snippetList.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.VisibleSnippets)));
         _snippetList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedSnippet), BindingMode.TwoWay));
+        Grid.SetRow(_snippetList, 9);
         panel.Children.Add(_snippetList);
 
         AttachHoverMotion(_centerPaneCard, -3);
+        return panel;
+    }
+
+    private UIElement BuildImportResolverPanel()
+    {
+        var panel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+
+        var importGrid = new Grid
+        {
+            ColumnSpacing = 8,
+            RowSpacing = 6,
+        };
+        importGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        importGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        importGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        importGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        importGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var importPath = new TextBox
+        {
+            Header = "Import-Pfad",
+            FontFamily = BodyFont,
+            CornerRadius = new CornerRadius(10),
+        };
+        ApplyInputChrome(importPath);
+        importPath.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ImportSourcePath), BindingMode.TwoWay));
+        importGrid.Children.Add(importPath);
+
+        var importFormat = new ComboBox
+        {
+            Header = "Format",
+            FontFamily = BodyFont,
+        };
+        importFormat.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.ImportFormatOptions), BindingMode.OneWay));
+        importFormat.SetBinding(ComboBox.SelectedItemProperty, CreateBinding(nameof(MainViewModel.ImportFormat), BindingMode.TwoWay));
+        Grid.SetColumn(importFormat, 1);
+        importGrid.Children.Add(importFormat);
+
+        var importButton = MakeCommandButton("Importieren", nameof(MainViewModel.ExecuteImportCommand), ButtonVisualTier.Secondary);
+        importButton.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetColumn(importButton, 2);
+        importGrid.Children.Add(importButton);
+
+        var importResult = new TextBlock
+        {
+            FontFamily = BodyFont,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(InkMeta),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        importResult.SetBinding(TextBlock.TextProperty, CreateBinding(nameof(MainViewModel.ImportResultText), BindingMode.OneWay));
+        Grid.SetRow(importResult, 1);
+        Grid.SetColumnSpan(importResult, 3);
+        importGrid.Children.Add(importResult);
+
+        panel.Children.Add(importGrid);
+
+        var resolverGrid = new Grid
+        {
+            ColumnSpacing = 8,
+            RowSpacing = 6,
+        };
+        resolverGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        resolverGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        resolverGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        resolverGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        resolverGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var resolverName = new ComboBox
+        {
+            Header = "Resolver",
+            FontFamily = BodyFont,
+        };
+        resolverName.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.ResolverOptions), BindingMode.OneWay));
+        resolverName.SetBinding(ComboBox.SelectedItemProperty, CreateBinding(nameof(MainViewModel.ResolverName), BindingMode.TwoWay));
+        resolverGrid.Children.Add(resolverName);
+
+        var resolverExpression = new TextBox
+        {
+            Header = "Ausdruck",
+            FontFamily = BodyFont,
+            CornerRadius = new CornerRadius(10),
+        };
+        ApplyInputChrome(resolverExpression);
+        resolverExpression.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ResolverExpression), BindingMode.TwoWay));
+        Grid.SetColumn(resolverExpression, 1);
+        resolverGrid.Children.Add(resolverExpression);
+
+        var resolverButton = MakeCommandButton("Aufloesen", nameof(MainViewModel.ResolveExternalValueCommand), ButtonVisualTier.Secondary);
+        resolverButton.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetColumn(resolverButton, 2);
+        resolverGrid.Children.Add(resolverButton);
+
+        var resolverResult = new TextBox
+        {
+            Header = "Resolver-Ergebnis",
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 56,
+            FontFamily = MonoFont,
+            CornerRadius = new CornerRadius(10),
+        };
+        ApplyInputChrome(resolverResult);
+        resolverResult.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.ResolverResultText), BindingMode.OneWay));
+        Grid.SetRow(resolverResult, 1);
+        Grid.SetColumnSpan(resolverResult, 3);
+        resolverGrid.Children.Add(resolverResult);
+
+        panel.Children.Add(resolverGrid);
+        return panel;
+    }
+
+    private UIElement BuildTemplateDesignerPanel()
+    {
+        var root = new Grid
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            ColumnSpacing = 10,
+            RowSpacing = 8,
+        };
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var fieldList = new ListView
+        {
+            DisplayMemberPath = nameof(TemplateFieldDesignerItemModel.Display),
+            MinHeight = 160,
+            MaxHeight = 280,
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(188, 247, 253, 255)),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(108, 84, 126, 141)),
+            BorderThickness = new Thickness(1),
+            Foreground = new SolidColorBrush(InkStrong),
+            Padding = new Thickness(4),
+        };
+        fieldList.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.TemplateFields), BindingMode.OneWay));
+        fieldList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedTemplateField), BindingMode.TwoWay));
+        root.Children.Add(fieldList);
+
+        var editorPanel = new StackPanel { Spacing = 6 };
+        Grid.SetColumn(editorPanel, 1);
+
+        var modeText = new TextBlock
+        {
+            FontFamily = BodyFont,
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(InkMeta),
+        };
+        modeText.SetBinding(TextBlock.TextProperty, CreateBinding(nameof(MainViewModel.TemplateDesignerMode), BindingMode.OneWay));
+        editorPanel.Children.Add(modeText);
+
+        var keyLabelGrid = new Grid { ColumnSpacing = 8 };
+        keyLabelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        keyLabelGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var keyInput = new TextBox { Header = "Key", FontFamily = MonoFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(keyInput);
+        keyInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TemplateFieldKeyInput), BindingMode.TwoWay));
+        keyLabelGrid.Children.Add(keyInput);
+        var labelInput = new TextBox { Header = "Label", FontFamily = BodyFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(labelInput);
+        labelInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TemplateFieldLabelInput), BindingMode.TwoWay));
+        Grid.SetColumn(labelInput, 1);
+        keyLabelGrid.Children.Add(labelInput);
+        editorPanel.Children.Add(keyLabelGrid);
+
+        var typeRequiredGrid = new Grid { ColumnSpacing = 8 };
+        typeRequiredGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        typeRequiredGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var typeCombo = new ComboBox { Header = "Typ", FontFamily = BodyFont };
+        typeCombo.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.TemplateFieldTypeOptions), BindingMode.OneWay));
+        typeCombo.SetBinding(ComboBox.SelectedItemProperty, CreateBinding(nameof(MainViewModel.TemplateFieldTypeInput), BindingMode.TwoWay));
+        typeRequiredGrid.Children.Add(typeCombo);
+        var requiredToggle = new ToggleSwitch { Header = "Required", FontFamily = BodyFont, FontSize = 12 };
+        requiredToggle.SetBinding(ToggleSwitch.IsOnProperty, CreateBinding(nameof(MainViewModel.TemplateFieldRequiredInput), BindingMode.TwoWay));
+        Grid.SetColumn(requiredToggle, 1);
+        typeRequiredGrid.Children.Add(requiredToggle);
+        editorPanel.Children.Add(typeRequiredGrid);
+
+        var placeholderInput = new TextBox { Header = "Placeholder", FontFamily = BodyFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(placeholderInput);
+        placeholderInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TemplateFieldPlaceholderInput), BindingMode.TwoWay));
+        editorPanel.Children.Add(placeholderInput);
+
+        var minMaxDefaultGrid = new Grid { ColumnSpacing = 8 };
+        minMaxDefaultGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        minMaxDefaultGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        minMaxDefaultGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var minInput = new TextBox { Header = "Min", FontFamily = MonoFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(minInput);
+        minInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TemplateFieldMinInput), BindingMode.TwoWay));
+        minMaxDefaultGrid.Children.Add(minInput);
+        var maxInput = new TextBox { Header = "Max", FontFamily = MonoFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(maxInput);
+        maxInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TemplateFieldMaxInput), BindingMode.TwoWay));
+        Grid.SetColumn(maxInput, 1);
+        minMaxDefaultGrid.Children.Add(maxInput);
+        var defaultInput = new TextBox { Header = "Default", FontFamily = BodyFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(defaultInput);
+        defaultInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TemplateFieldDefaultValueInput), BindingMode.TwoWay));
+        Grid.SetColumn(defaultInput, 2);
+        minMaxDefaultGrid.Children.Add(defaultInput);
+        editorPanel.Children.Add(minMaxDefaultGrid);
+
+        var optionsInput = new TextBox
+        {
+            Header = "Options (key:label; key2:label2)",
+            FontFamily = MonoFont,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+        ApplyInputChrome(optionsInput);
+        optionsInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TemplateFieldOptionsInput), BindingMode.TwoWay));
+        editorPanel.Children.Add(optionsInput);
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+        };
+        buttonRow.Children.Add(MakeCommandButton("Neu", nameof(MainViewModel.NewTemplateFieldCommand), ButtonVisualTier.Tertiary));
+        buttonRow.Children.Add(MakeCommandButton("Feld speichern", nameof(MainViewModel.SaveTemplateFieldCommand), ButtonVisualTier.Secondary));
+        buttonRow.Children.Add(MakeCommandButton("Feld loeschen", nameof(MainViewModel.DeleteSelectedTemplateFieldCommand), ButtonVisualTier.Tertiary));
+        buttonRow.Children.Add(MakeCommandButton("Template speichern", nameof(MainViewModel.SaveTemplateDesignCommand), ButtonVisualTier.Primary));
+        editorPanel.Children.Add(buttonRow);
+
+        root.Children.Add(editorPanel);
+
+        var hint = new TextBlock
+        {
+            Text = "Definiere Formularfelder visuell und speichere sie direkt im Snippet-Template.",
+            FontFamily = BodyFont,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(InkMeta),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumnSpan(hint, 2);
+        Grid.SetRow(hint, 1);
+        root.Children.Add(hint);
+
+        return root;
+    }
+
+    private UIElement BuildAiStudioPanel()
+    {
+        var panel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+
+        var providerRow = new Grid { ColumnSpacing = 8 };
+        providerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        providerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var providerCombo = new ComboBox { Header = "Provider", FontFamily = BodyFont };
+        providerCombo.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.AiProviderOptions), BindingMode.OneWay));
+        providerCombo.SetBinding(ComboBox.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedAiProvider), BindingMode.TwoWay));
+        providerRow.Children.Add(providerCombo);
+
+        var modelInput = new TextBox { Header = "Model (optional)", FontFamily = BodyFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(modelInput);
+        modelInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.AiModelInput), BindingMode.TwoWay));
+        Grid.SetColumn(modelInput, 1);
+        providerRow.Children.Add(modelInput);
+        panel.Children.Add(providerRow);
+
+        var promptInput = new TextBox
+        {
+            Header = "Prompt / Rewrite-Instruktion",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 80,
+            FontFamily = BodyFont,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(promptInput, ScrollBarVisibility.Auto);
+        ApplyInputChrome(promptInput);
+        promptInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.AiPromptInput), BindingMode.TwoWay));
+        panel.Children.Add(promptInput);
+
+        var translationRow = new Grid { ColumnSpacing = 8 };
+        translationRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        translationRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var sourceLang = new TextBox { Header = "Quelle", FontFamily = MonoFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(sourceLang);
+        sourceLang.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TranslationSourceLanguageInput), BindingMode.TwoWay));
+        translationRow.Children.Add(sourceLang);
+
+        var targetLang = new TextBox { Header = "Ziel", FontFamily = MonoFont, CornerRadius = new CornerRadius(8) };
+        ApplyInputChrome(targetLang);
+        targetLang.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TranslationTargetLanguageInput), BindingMode.TwoWay));
+        Grid.SetColumn(targetLang, 1);
+        translationRow.Children.Add(targetLang);
+        panel.Children.Add(translationRow);
+
+        var actionRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        actionRow.Children.Add(MakeCommandButton("Generieren", nameof(MainViewModel.GenerateWithAiCommand), ButtonVisualTier.Primary));
+        actionRow.Children.Add(MakeCommandButton("Umformulieren", nameof(MainViewModel.RewriteWithAiCommand), ButtonVisualTier.Secondary));
+        actionRow.Children.Add(MakeCommandButton("Uebersetzen", nameof(MainViewModel.TranslateWithAiCommand), ButtonVisualTier.Secondary));
+        actionRow.Children.Add(MakeCommandButton("Health", nameof(MainViewModel.RefreshAiProviderHealthCommand), ButtonVisualTier.Tertiary));
+        actionRow.Children.Add(MakeCommandButton("Uebernehmen", nameof(MainViewModel.ApplyAiResultToEditorCommand), ButtonVisualTier.Tertiary));
+        panel.Children.Add(actionRow);
+
+        var resultBox = new TextBox
+        {
+            Header = "KI-Ergebnis",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 100,
+            FontFamily = BodyFont,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(resultBox, ScrollBarVisibility.Auto);
+        ApplyInputChrome(resultBox);
+        resultBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.AiResultText), BindingMode.TwoWay));
+        panel.Children.Add(resultBox);
+
+        var healthBox = new TextBox
+        {
+            Header = "Provider Health",
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 72,
+            FontFamily = MonoFont,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(healthBox, ScrollBarVisibility.Auto);
+        ApplyInputChrome(healthBox);
+        healthBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.AiHealthReportText), BindingMode.OneWay));
+        panel.Children.Add(healthBox);
+
+        return panel;
+    }
+
+    private UIElement BuildMacroStudioPanel()
+    {
+        var panel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+
+        var scriptBox = new TextBox
+        {
+            Header = "DSL Skript",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 110,
+            FontFamily = MonoFont,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(scriptBox, ScrollBarVisibility.Auto);
+        ApplyInputChrome(scriptBox);
+        scriptBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.MacroScriptInput), BindingMode.TwoWay));
+        panel.Children.Add(scriptBox);
+
+        var varsBox = new TextBox
+        {
+            Header = "Variablen (key=value pro Zeile oder JSON)",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 70,
+            FontFamily = MonoFont,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(varsBox, ScrollBarVisibility.Auto);
+        ApplyInputChrome(varsBox);
+        varsBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.MacroVariablesInput), BindingMode.TwoWay));
+        panel.Children.Add(varsBox);
+
+        var policyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        policyRow.Children.Add(CreateMacroPolicyToggle("Process", nameof(MainViewModel.MacroAllowProcessStart)));
+        policyRow.Children.Add(CreateMacroPolicyToggle("FileWrite", nameof(MainViewModel.MacroAllowFileSystemWrite)));
+        policyRow.Children.Add(CreateMacroPolicyToggle("External", nameof(MainViewModel.MacroAllowExternalOpen)));
+        policyRow.Children.Add(CreateMacroPolicyToggle("Notify", nameof(MainViewModel.MacroAllowNotifications)));
+        policyRow.Children.Add(CreateMacroPolicyToggle("PowerShell", nameof(MainViewModel.MacroAllowPowerShell)));
+        panel.Children.Add(policyRow);
+
+        var policySummary = new TextBlock
+        {
+            FontFamily = BodyFont,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(InkMeta),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        policySummary.SetBinding(TextBlock.TextProperty, CreateBinding(nameof(MainViewModel.MacroPolicySummaryText), BindingMode.OneWay));
+        panel.Children.Add(policySummary);
+
+        var runRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        runRow.Children.Add(MakeCommandButton("Makro ausfuehren", nameof(MainViewModel.ExecuteMacroScriptCommand), ButtonVisualTier.Primary));
+        panel.Children.Add(runRow);
+
+        var outputBox = new TextBox
+        {
+            Header = "Output",
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 70,
+            FontFamily = MonoFont,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(outputBox, ScrollBarVisibility.Auto);
+        ApplyInputChrome(outputBox);
+        outputBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.MacroOutputText), BindingMode.OneWay));
+        panel.Children.Add(outputBox);
+
+        var errorBox = new TextBox
+        {
+            Header = "Fehler",
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 60,
+            FontFamily = MonoFont,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(errorBox, ScrollBarVisibility.Auto);
+        ApplyInputChrome(errorBox);
+        errorBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.MacroErrorsText), BindingMode.OneWay));
+        panel.Children.Add(errorBox);
+
+        var auditBox = new TextBox
+        {
+            Header = "Audit Trail",
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 80,
+            FontFamily = MonoFont,
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+        };
+        ScrollViewer.SetVerticalScrollBarVisibility(auditBox, ScrollBarVisibility.Auto);
+        ApplyInputChrome(auditBox);
+        auditBox.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.MacroAuditText), BindingMode.OneWay));
+        panel.Children.Add(auditBox);
+
         return panel;
     }
 
@@ -462,8 +1101,8 @@ public sealed partial class MainPage : Page
     {
         var panel = new StackPanel
         {
-            Spacing = 8,
-            Padding = new Thickness(18, 18, 18, 18),
+            Spacing = 6,
+            Padding = new Thickness(16, 16, 16, 16),
         };
 
         panel.Children.Add(new TextBlock
@@ -483,10 +1122,29 @@ public sealed partial class MainPage : Page
 
         _insertToolsExpander = new Expander
         {
-            Header = "Einfuegen-Tools (Placeholder, Tabelle, Bild)",
+            Header = new TextBlock
+            {
+                Text = "Einfuegen-Tools (Placeholder, Tabelle, Bild)",
+                FontFamily = BodyFont,
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(InkLabel),
+            },
             IsExpanded = false,
-            Margin = new Thickness(0, 2, 0, 4),
-            Content = BuildInsertToolsPanel(),
+            Margin = new Thickness(0, 2, 0, 2),
+            BorderBrush = new SolidColorBrush(CommandSurfaceBorder),
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(208, 239, 247, 252)),
+            Content = new Border
+            {
+                Margin = new Thickness(0, 6, 0, 0),
+                Padding = new Thickness(8, 6, 8, 8),
+                CornerRadius = new CornerRadius(10),
+                BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(110, 89, 128, 144)),
+                BorderThickness = new Thickness(1),
+                Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(170, 249, 253, 255)),
+                Child = BuildInsertToolsPanel(),
+            },
         };
         panel.Children.Add(_insertToolsExpander);
 
@@ -544,6 +1202,60 @@ public sealed partial class MainPage : Page
         commentGrid.Children.Add(commentButton);
         panel.Children.Add(commentGrid);
 
+        var templateDesignerExpander = new Expander
+        {
+            IsExpanded = false,
+            Header = new TextBlock
+            {
+                Text = "Template-Designer",
+                FontFamily = BodyFont,
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(InkLabel),
+            },
+            BorderBrush = new SolidColorBrush(CommandSurfaceBorder),
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(205, 244, 250, 253)),
+            Content = BuildTemplateDesignerPanel(),
+        };
+        panel.Children.Add(templateDesignerExpander);
+
+        var aiExpander = new Expander
+        {
+            IsExpanded = false,
+            Header = new TextBlock
+            {
+                Text = "KI Studio (Generate / Rewrite / Translate)",
+                FontFamily = BodyFont,
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(InkLabel),
+            },
+            BorderBrush = new SolidColorBrush(CommandSurfaceBorder),
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(208, 239, 247, 252)),
+            Content = BuildAiStudioPanel(),
+        };
+        panel.Children.Add(aiExpander);
+
+        var macroExpander = new Expander
+        {
+            IsExpanded = false,
+            Header = new TextBlock
+            {
+                Text = "Makro / DSL Studio",
+                FontFamily = BodyFont,
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(InkLabel),
+            },
+            BorderBrush = new SolidColorBrush(CommandSurfaceBorder),
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(208, 239, 247, 252)),
+            Content = BuildMacroStudioPanel(),
+        };
+        panel.Children.Add(macroExpander);
+
         _editorSplitGrid = new Grid
         {
             RowSpacing = 8,
@@ -588,9 +1300,9 @@ public sealed partial class MainPage : Page
         {
             Text = "WYSIWYG Editor: Formatierung, Tabellen, Bilder und Placeholder mit sicherer Sanitization.",
             FontFamily = BodyFont,
-            FontSize = 12,
+            FontSize = 13,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            Foreground = new SolidColorBrush(InkMeta),
+            Foreground = new SolidColorBrush(InkLabel),
         });
 
         _productivityGrid = new Grid
@@ -607,7 +1319,7 @@ public sealed partial class MainPage : Page
         {
             Text = "Dokumentgenerator Vorschau",
             FontFamily = BodyFont,
-            FontSize = 14,
+            FontSize = 15,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
             Foreground = new SolidColorBrush(InkLabel),
         };
@@ -632,7 +1344,7 @@ public sealed partial class MainPage : Page
         {
             Text = "Mehrfach-Clipboard Vorschau",
             FontFamily = BodyFont,
-            FontSize = 14,
+            FontSize = 15,
             FontWeight = Microsoft.UI.Text.FontWeights.Bold,
             Foreground = new SolidColorBrush(InkLabel),
         };
@@ -665,10 +1377,13 @@ public sealed partial class MainPage : Page
         var panel = new Grid
         {
             Padding = new Thickness(16, 14, 16, 14),
+            RowSpacing = 8,
         };
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var header = new Grid
         {
@@ -691,14 +1406,240 @@ public sealed partial class MainPage : Page
         Grid.SetRow(_triggerTargetText, 1);
         panel.Children.Add(_triggerTargetText);
 
-        var scroller = new ScrollViewer
+        _triggerRuleList = new ListView
         {
-            Content = _triggerItemsPanel,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            MinHeight = 120,
+            MaxHeight = 260,
+            SelectionMode = ListViewSelectionMode.Single,
+            DisplayMemberPath = nameof(TriggerRuleItemModel.Display),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(46, 196, 231, 238)),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(95, 96, 152, 165)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(6),
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 229, 246, 250)),
         };
-        Grid.SetRow(scroller, 2);
-        panel.Children.Add(scroller);
+        _triggerRuleList.Resources["ListViewItemForeground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 227, 246, 250));
+        _triggerRuleList.Resources["ListViewItemForegroundSelected"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 241, 252, 255));
+        _triggerRuleList.Resources["ListViewItemBackgroundSelected"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 56, 98, 116));
+        _triggerRuleList.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.TriggerRules), BindingMode.OneWay));
+        _triggerRuleList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedTriggerRule), BindingMode.TwoWay));
+        Grid.SetRow(_triggerRuleList, 2);
+        panel.Children.Add(_triggerRuleList);
+
+        var triggerEditorBorder = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(110, 88, 144, 158)),
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(72, 28, 63, 83)),
+            Padding = new Thickness(10, 8, 10, 10),
+        };
+        var triggerEditor = new Grid
+        {
+            ColumnSpacing = 8,
+            RowSpacing = 6,
+        };
+        triggerEditor.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        triggerEditor.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        triggerEditor.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        triggerEditor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        triggerEditor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        triggerEditor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        triggerEditor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var modeText = new TextBlock
+        {
+            FontFamily = BodyFont,
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 213, 239, 244)),
+        };
+        modeText.SetBinding(TextBlock.TextProperty, CreateBinding(nameof(MainViewModel.TriggerEditorMode), BindingMode.OneWay));
+        Grid.SetColumnSpan(modeText, 3);
+        triggerEditor.Children.Add(modeText);
+
+        var typeCombo = new ComboBox
+        {
+            Header = "Typ",
+            FontFamily = BodyFont,
+        };
+        typeCombo.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.TriggerTypeOptions), BindingMode.OneWay));
+        typeCombo.SetBinding(ComboBox.SelectedItemProperty, CreateBinding(nameof(MainViewModel.TriggerTypeInput), BindingMode.TwoWay));
+        Grid.SetRow(typeCombo, 1);
+        triggerEditor.Children.Add(typeCombo);
+
+        var patternInput = new TextBox
+        {
+            Header = "Pattern",
+            FontFamily = BodyFont,
+            CornerRadius = new CornerRadius(8),
+        };
+        ApplyInputChrome(patternInput);
+        patternInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TriggerPatternInput), BindingMode.TwoWay));
+        Grid.SetRow(patternInput, 1);
+        Grid.SetColumn(patternInput, 1);
+        triggerEditor.Children.Add(patternInput);
+
+        var saveTriggerButton = MakeCommandButton("Speichern", nameof(MainViewModel.SaveTriggerRuleCommand), ButtonVisualTier.Secondary);
+        saveTriggerButton.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetRow(saveTriggerButton, 1);
+        Grid.SetColumn(saveTriggerButton, 2);
+        triggerEditor.Children.Add(saveTriggerButton);
+
+        var scopeCombo = new ComboBox
+        {
+            Header = "Scope",
+            FontFamily = BodyFont,
+        };
+        scopeCombo.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.TriggerScopeOptions), BindingMode.OneWay));
+        scopeCombo.SetBinding(ComboBox.SelectedItemProperty, CreateBinding(nameof(MainViewModel.TriggerScopeInput), BindingMode.TwoWay));
+        Grid.SetRow(scopeCombo, 2);
+        triggerEditor.Children.Add(scopeCombo);
+
+        var processInput = new TextBox
+        {
+            Header = "TargetProcess (optional)",
+            FontFamily = BodyFont,
+            CornerRadius = new CornerRadius(8),
+        };
+        ApplyInputChrome(processInput);
+        processInput.SetBinding(TextBox.TextProperty, CreateBinding(nameof(MainViewModel.TriggerTargetProcessInput), BindingMode.TwoWay));
+        Grid.SetRow(processInput, 2);
+        Grid.SetColumn(processInput, 1);
+        triggerEditor.Children.Add(processInput);
+
+        var newTriggerButton = MakeCommandButton("Neu", nameof(MainViewModel.NewTriggerRuleCommand), ButtonVisualTier.Tertiary);
+        newTriggerButton.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetRow(newTriggerButton, 2);
+        Grid.SetColumn(newTriggerButton, 2);
+        triggerEditor.Children.Add(newTriggerButton);
+
+        var flagsWrap = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+        };
+        var caseToggle = new ToggleSwitch
+        {
+            Header = "Case Sensitive",
+            FontFamily = BodyFont,
+            FontSize = 12,
+        };
+        caseToggle.SetBinding(ToggleSwitch.IsOnProperty, CreateBinding(nameof(MainViewModel.TriggerCaseSensitiveInput), BindingMode.TwoWay));
+        flagsWrap.Children.Add(caseToggle);
+        var enabledToggle = new ToggleSwitch
+        {
+            Header = "Aktiv",
+            FontFamily = BodyFont,
+            FontSize = 12,
+        };
+        enabledToggle.SetBinding(ToggleSwitch.IsOnProperty, CreateBinding(nameof(MainViewModel.TriggerEnabledInput), BindingMode.TwoWay));
+        flagsWrap.Children.Add(enabledToggle);
+        Grid.SetRow(flagsWrap, 3);
+        Grid.SetColumnSpan(flagsWrap, 2);
+        triggerEditor.Children.Add(flagsWrap);
+
+        var deleteTriggerButton = MakeCommandButton("Loeschen", nameof(MainViewModel.DeleteSelectedTriggerRuleCommand), ButtonVisualTier.Tertiary);
+        deleteTriggerButton.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetRow(deleteTriggerButton, 3);
+        Grid.SetColumn(deleteTriggerButton, 2);
+        triggerEditor.Children.Add(deleteTriggerButton);
+
+        triggerEditorBorder.Child = triggerEditor;
+        Grid.SetRow(triggerEditorBorder, 3);
+        panel.Children.Add(triggerEditorBorder);
+
+        var recoveryGrid = new Grid
+        {
+            ColumnSpacing = 8,
+            RowSpacing = 6,
+        };
+        recoveryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        recoveryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        recoveryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        recoveryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        recoveryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var versionLabel = new TextBlock
+        {
+            Text = "Versionen",
+            FontFamily = BodyFont,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 226, 245, 249)),
+        };
+        recoveryGrid.Children.Add(versionLabel);
+
+        var trashLabel = new TextBlock
+        {
+            Text = "Papierkorb",
+            FontFamily = BodyFont,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 226, 245, 249)),
+        };
+        Grid.SetColumn(trashLabel, 1);
+        recoveryGrid.Children.Add(trashLabel);
+
+        _versionList = new ListView
+        {
+            MinHeight = 110,
+            MaxHeight = 190,
+            DisplayMemberPath = nameof(VersionEntryItemModel.Display),
+            SelectionMode = ListViewSelectionMode.Single,
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(44, 190, 226, 236)),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(95, 96, 152, 165)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 230, 247, 251)),
+        };
+        _versionList.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.VersionEntries), BindingMode.OneWay));
+        _versionList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedVersionEntry), BindingMode.TwoWay));
+        Grid.SetRow(_versionList, 1);
+        recoveryGrid.Children.Add(_versionList);
+
+        _trashList = new ListView
+        {
+            MinHeight = 110,
+            MaxHeight = 190,
+            DisplayMemberPath = nameof(TrashEntryItemModel.Display),
+            SelectionMode = ListViewSelectionMode.Single,
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(44, 190, 226, 236)),
+            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(95, 96, 152, 165)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Foreground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 230, 247, 251)),
+        };
+        _trashList.SetBinding(ItemsControl.ItemsSourceProperty, CreateBinding(nameof(MainViewModel.TrashEntries), BindingMode.OneWay));
+        _trashList.SetBinding(ListView.SelectedItemProperty, CreateBinding(nameof(MainViewModel.SelectedTrashEntry), BindingMode.TwoWay));
+        Grid.SetColumn(_trashList, 1);
+        Grid.SetRow(_trashList, 1);
+        recoveryGrid.Children.Add(_trashList);
+
+        var versionButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+        };
+        versionButtons.Children.Add(MakeCommandButton("Laden", nameof(MainViewModel.LoadVersionsCommand), ButtonVisualTier.Tertiary));
+        versionButtons.Children.Add(MakeCommandButton("Rollback", nameof(MainViewModel.RollbackToSelectedVersionCommand), ButtonVisualTier.Secondary));
+        Grid.SetRow(versionButtons, 2);
+        recoveryGrid.Children.Add(versionButtons);
+
+        var trashButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        trashButtons.Children.Add(MakeCommandButton("Refresh", nameof(MainViewModel.LoadTrashEntriesCommand), ButtonVisualTier.Tertiary));
+        trashButtons.Children.Add(MakeCommandButton("Restore", nameof(MainViewModel.RestoreLatestTrashCommand), ButtonVisualTier.Secondary));
+        trashButtons.Children.Add(MakeCommandButton("Hard Delete", nameof(MainViewModel.DeleteSelectedTrashEntryCommand), ButtonVisualTier.Tertiary));
+        Grid.SetColumn(trashButtons, 1);
+        Grid.SetRow(trashButtons, 2);
+        recoveryGrid.Children.Add(trashButtons);
+
+        Grid.SetRow(recoveryGrid, 4);
+        panel.Children.Add(recoveryGrid);
 
         AttachHoverMotion(_triggerCard, -3);
         return panel;
@@ -706,51 +1647,53 @@ public sealed partial class MainPage : Page
 
     private UIElement BuildLibraryCommandBar()
     {
-        var buttons = new List<Button>
-        {
-            MakeToolbarCommandButton("Suchen", nameof(MainViewModel.SearchCommand), ButtonVisualTier.Primary),
-            MakeToolbarCommandButton("Ersetzen", nameof(MainViewModel.SearchReplaceVisibleCommand), ButtonVisualTier.Secondary),
-            MakeToolbarCommandButton("Duplikate", nameof(MainViewModel.RemoveDuplicatesCommand), ButtonVisualTier.Secondary),
-            MakeToolbarCommandButton("Duplizieren", nameof(MainViewModel.DuplicateSnippetCommand), ButtonVisualTier.Secondary),
-            MakeToolbarCommandButton("Verschieben", nameof(MainViewModel.MoveSnippetToSelectedFolderCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Bulk Font", nameof(MainViewModel.ApplyBulkFontCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Hervorheben", nameof(MainViewModel.ToggleHighlightCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Ausblenden", nameof(MainViewModel.ToggleHiddenCommand), ButtonVisualTier.Tertiary),
-        };
-        return BuildAdaptiveToolbar(buttons, 300);
+        var bar = CreateCommandBar();
+
+        bar.PrimaryCommands.Add(MakeCommandBarCommandButton("Suchen", nameof(MainViewModel.SearchCommand), Symbol.Find, ButtonVisualTier.Primary));
+        bar.PrimaryCommands.Add(MakeCommandBarCommandButton("Ersetzen", nameof(MainViewModel.SearchReplaceVisibleCommand), Symbol.Switch, ButtonVisualTier.Secondary));
+        bar.PrimaryCommands.Add(MakeCommandBarCommandButton("Duplikate", nameof(MainViewModel.RemoveDuplicatesCommand), Symbol.Filter, ButtonVisualTier.Secondary));
+
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Duplizieren", nameof(MainViewModel.DuplicateSnippetCommand), Symbol.Copy, ButtonVisualTier.Secondary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Verschieben", nameof(MainViewModel.MoveSnippetToSelectedFolderCommand), Symbol.Forward, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Bulk Font", nameof(MainViewModel.ApplyBulkFontCommand), Symbol.FontColor, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Hervorheben", nameof(MainViewModel.ToggleHighlightCommand), Symbol.Highlight, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Ausblenden", nameof(MainViewModel.ToggleHiddenCommand), Symbol.HideBcc, ButtonVisualTier.Tertiary));
+
+        return bar;
     }
 
     private UIElement BuildEditorWorkflowCommandBar()
     {
-        var buttons = new List<Button>
-        {
-            MakeToolbarActionButton("Einfuegen", OnInsertClicked, ButtonVisualTier.Primary),
-            MakeToolbarCommandButton("Speichern", nameof(MainViewModel.SaveSnippetCommand), ButtonVisualTier.Secondary),
-            MakeToolbarCommandButton("Simulieren", nameof(MainViewModel.SimulateInsertCommand), ButtonVisualTier.Secondary),
-            MakeToolbarCommandButton("Versionen", nameof(MainViewModel.LoadVersionsCommand), ButtonVisualTier.Secondary),
-            MakeToolbarCommandButton("Rollback", nameof(MainViewModel.RollbackToPreviousVersionCommand), ButtonVisualTier.Secondary),
-            MakeToolbarCommandButton("Papierkorb", nameof(MainViewModel.MoveToTrashCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Aus Trash", nameof(MainViewModel.RestoreLatestTrashCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Trash leeren", nameof(MainViewModel.PurgeTrashCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Dokument", nameof(MainViewModel.GenerateDocumentCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Korrektur", nameof(MainViewModel.ApplyTextCorrectionsCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Clip Verlauf", nameof(MainViewModel.LoadClipboardHistoryCommand), ButtonVisualTier.Tertiary),
-            MakeToolbarCommandButton("Clip laden", nameof(MainViewModel.InsertLatestClipboardHistoryCommand), ButtonVisualTier.Tertiary),
-        };
-        return BuildAdaptiveToolbar(buttons, 340);
+        var bar = CreateCommandBar();
+
+        bar.PrimaryCommands.Add(MakeCommandBarActionButton("Einfuegen", OnInsertClicked, Symbol.Paste, ButtonVisualTier.Primary));
+        bar.PrimaryCommands.Add(MakeCommandBarCommandButton("Speichern", nameof(MainViewModel.SaveSnippetCommand), Symbol.Save, ButtonVisualTier.Secondary));
+        bar.PrimaryCommands.Add(MakeCommandBarCommandButton("Simulieren", nameof(MainViewModel.SimulateInsertCommand), Symbol.Play, ButtonVisualTier.Secondary));
+
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Versionen", nameof(MainViewModel.LoadVersionsCommand), Symbol.Clock, ButtonVisualTier.Secondary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Rollback", nameof(MainViewModel.RollbackToPreviousVersionCommand), Symbol.Undo, ButtonVisualTier.Secondary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Papierkorb", nameof(MainViewModel.MoveToTrashCommand), Symbol.Delete, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Aus Trash", nameof(MainViewModel.RestoreLatestTrashCommand), Symbol.Repair, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Trash leeren", nameof(MainViewModel.PurgeTrashCommand), Symbol.Clear, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Dokument", nameof(MainViewModel.GenerateDocumentCommand), Symbol.Document, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Korrektur", nameof(MainViewModel.ApplyTextCorrectionsCommand), Symbol.Edit, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Clip Verlauf", nameof(MainViewModel.LoadClipboardHistoryCommand), Symbol.Paste, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarCommandButton("Clip laden", nameof(MainViewModel.InsertLatestClipboardHistoryCommand), Symbol.Paste, ButtonVisualTier.Tertiary));
+
+        return bar;
     }
 
     private UIElement BuildFormattingCommandBar()
     {
-        var buttons = new List<Button>
-        {
-            MakeToolbarActionButton("Fett", OnFormatBoldClicked, ButtonVisualTier.Primary),
-            MakeToolbarActionButton("Kursiv", OnFormatItalicClicked, ButtonVisualTier.Secondary),
-            MakeToolbarActionButton("Unterstrichen", OnFormatUnderlineClicked, ButtonVisualTier.Secondary),
-            MakeToolbarActionButton("Liste", OnBulletListClicked, ButtonVisualTier.Tertiary),
-            MakeToolbarActionButton("Nummeriert", OnNumberedListClicked, ButtonVisualTier.Tertiary),
-        };
-        return BuildAdaptiveToolbar(buttons, 280);
+        var bar = CreateCommandBar();
+
+        bar.PrimaryCommands.Add(MakeCommandBarActionButton("Fett", OnFormatBoldClicked, Symbol.Bold, ButtonVisualTier.Primary));
+        bar.PrimaryCommands.Add(MakeCommandBarActionButton("Kursiv", OnFormatItalicClicked, Symbol.Italic, ButtonVisualTier.Secondary));
+        bar.SecondaryCommands.Add(MakeCommandBarActionButton("Unterstrichen", OnFormatUnderlineClicked, Symbol.Underline, ButtonVisualTier.Secondary));
+        bar.SecondaryCommands.Add(MakeCommandBarActionButton("Liste", OnBulletListClicked, Symbol.List, ButtonVisualTier.Tertiary));
+        bar.SecondaryCommands.Add(MakeCommandBarActionButton("Nummeriert", OnNumberedListClicked, Symbol.AllApps, ButtonVisualTier.Tertiary));
+
+        return bar;
     }
 
     private UIElement BuildInsertToolsPanel()
@@ -841,152 +1784,113 @@ public sealed partial class MainPage : Page
         return panel;
     }
 
-    private UIElement BuildAdaptiveToolbar(IReadOnlyList<Button> buttons, double minRowWidth)
+    private static CommandBar CreateCommandBar()
     {
-        var rowsHost = new StackPanel
+        var bar = new CommandBar
         {
-            Orientation = Orientation.Vertical,
-            Spacing = 6,
-        };
-
-        var container = new Border
-        {
-            CornerRadius = new CornerRadius(12),
+            IsDynamicOverflowEnabled = true,
+            OverflowButtonVisibility = CommandBarOverflowButtonVisibility.Auto,
+            DefaultLabelPosition = CommandBarDefaultLabelPosition.Right,
+            RequestedTheme = ElementTheme.Light,
             BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(118, 86, 121, 136)),
-            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(200, 246, 251, 255)),
-            Padding = new Thickness(8),
-            Child = rowsHost,
+            BorderBrush = new SolidColorBrush(CommandSurfaceBorder),
+            Background = new SolidColorBrush(CommandSurface),
+            Foreground = new SolidColorBrush(InkStrong),
+            Margin = new Thickness(0, 0, 0, 2),
+            Padding = new Thickness(2),
         };
 
-        var layout = new AdaptiveToolbarLayout
+        void ApplySurface()
         {
-            Container = container,
-            RowsHost = rowsHost,
-            Buttons = buttons.ToList(),
-            MinRowWidth = minRowWidth,
-        };
-
-        // Initial render without dynamic re-parenting during early page construction.
-        var initialRow = CreateToolbarRow();
-        foreach (var button in layout.Buttons)
-        {
-            button.Margin = new Thickness(0, 0, 8, 0);
-            initialRow.Children.Add(button);
+            bar.Background = new SolidColorBrush(CommandSurface);
+            bar.BorderBrush = new SolidColorBrush(CommandSurfaceBorder);
+            bar.Foreground = new SolidColorBrush(InkStrong);
         }
 
-        layout.RowsHost.Children.Add(initialRow);
-        _adaptiveToolbars.Add(layout);
-        container.SizeChanged += (_, args) =>
-        {
-            if (!_toolbarReflowReady)
-            {
-                return;
-            }
+        bar.Opened += (_, _) => ApplySurface();
+        bar.Closed += (_, _) => ApplySurface();
+        ApplySurface();
 
-            try
-            {
-                ReflowAdaptiveToolbar(layout, args.NewSize.Width);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Trace.TraceWarning($"Adaptive toolbar reflow failed on size change: {ex}");
-            }
-        };
-
-        return container;
+        bar.Resources["CommandBarBackground"] = new SolidColorBrush(CommandSurface);
+        bar.Resources["CommandBarBackgroundOpen"] = new SolidColorBrush(CommandSurface);
+        bar.Resources["CommandBarBorderBrush"] = new SolidColorBrush(CommandSurfaceBorder);
+        bar.Resources["CommandBarBorderBrushOpen"] = new SolidColorBrush(CommandSurfaceBorder);
+        bar.Resources["CommandBarForeground"] = new SolidColorBrush(InkStrong);
+        bar.Resources["AppBarBackground"] = new SolidColorBrush(CommandSurface);
+        bar.Resources["AppBarBackgroundThemeBrush"] = new SolidColorBrush(CommandSurface);
+        bar.Resources["CommandBarOverflowPresenterForeground"] = new SolidColorBrush(InkStrong);
+        bar.Resources["CommandBarOverflowPresenterBackground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 240, 247, 252));
+        bar.Resources["CommandBarFlyoutBackground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 240, 247, 252));
+        bar.Resources["CommandBarFlyoutForeground"] = new SolidColorBrush(InkStrong);
+        return bar;
     }
 
-    private void ReflowAdaptiveToolbars()
+    private static AppBarButton MakeCommandBarCommandButton(string label, string commandPath, Symbol symbol, ButtonVisualTier tier)
     {
-        if (!_toolbarReflowReady)
-        {
-            return;
-        }
-
-        foreach (var layout in _adaptiveToolbars)
-        {
-            try
-            {
-                ReflowAdaptiveToolbar(layout, layout.Container.ActualWidth);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Trace.TraceWarning($"Adaptive toolbar reflow failed: {ex}");
-            }
-        }
-    }
-
-    private static void ReflowAdaptiveToolbar(AdaptiveToolbarLayout layout, double widthHint)
-    {
-        var availableWidth = Math.Max(layout.MinRowWidth, widthHint > 0 ? widthHint - 22 : layout.MinRowWidth);
-        layout.RowsHost.Children.Clear();
-
-        var currentRow = CreateToolbarRow();
-        var currentWidth = 0d;
-
-        foreach (var button in layout.Buttons)
-        {
-            // Buttons can already belong to a previous row from an earlier reflow.
-            // Detach first to avoid "already has a parent" exceptions on startup/resize.
-            if (button.Parent is Panel previousParent)
-            {
-                previousParent.Children.Remove(button);
-            }
-
-            var estimatedWidth = EstimateButtonWidth(button);
-            if (currentRow.Children.Count > 0 && currentWidth + estimatedWidth > availableWidth)
-            {
-                layout.RowsHost.Children.Add(currentRow);
-                currentRow = CreateToolbarRow();
-                currentWidth = 0;
-            }
-
-            button.Margin = new Thickness(0, 0, 8, 0);
-            currentRow.Children.Add(button);
-            currentWidth += estimatedWidth;
-        }
-
-        if (currentRow.Children.Count > 0)
-        {
-            layout.RowsHost.Children.Add(currentRow);
-        }
-    }
-
-    private static StackPanel CreateToolbarRow()
-    {
-        return new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 0,
-        };
-    }
-
-    private static double EstimateButtonWidth(Button button)
-    {
-        var text = button.Content as string ?? string.Empty;
-        return Math.Max(98, (text.Length * 8) + 54);
-    }
-
-    private static Button MakeToolbarCommandButton(string text, string commandPath, ButtonVisualTier tier)
-    {
-        var button = MakeCommandButton(text, commandPath, tier);
-        ApplyToolbarButtonMetrics(button);
+        var button = BuildCommandBarButton(label, symbol, tier);
+        button.SetBinding(AppBarButton.CommandProperty, CreateBinding(commandPath));
         return button;
     }
 
-    private static Button MakeToolbarActionButton(string text, RoutedEventHandler onClick, ButtonVisualTier tier)
+    private static AppBarButton MakeCommandBarActionButton(string label, RoutedEventHandler onClick, Symbol symbol, ButtonVisualTier tier)
     {
-        var button = MakeActionButton(text, onClick, tier);
-        ApplyToolbarButtonMetrics(button);
+        var button = BuildCommandBarButton(label, symbol, tier);
+        button.Click += onClick;
         return button;
     }
 
-    private static void ApplyToolbarButtonMetrics(Button button)
+    private static AppBarButton BuildCommandBarButton(string label, Symbol symbol, ButtonVisualTier tier)
     {
-        button.MinWidth = 98;
-        button.MinHeight = 34;
-        button.Margin = new Thickness(0, 0, 8, 0);
+        var palette = ResolveButtonPalette(tier);
+        var button = new AppBarButton
+        {
+            Label = label,
+            Icon = new SymbolIcon(symbol),
+            Foreground = new SolidColorBrush(palette.Foreground),
+            FontFamily = BodyFont,
+            FontWeight = tier == ButtonVisualTier.Tertiary
+                ? Microsoft.UI.Text.FontWeights.Normal
+                : Microsoft.UI.Text.FontWeights.SemiBold,
+            MinWidth = 86,
+        };
+
+        if (tier == ButtonVisualTier.Primary)
+        {
+            button.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 15, 134, 128));
+            button.BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 10, 97, 96));
+            button.BorderThickness = new Thickness(1);
+            button.CornerRadius = new CornerRadius(8);
+            button.Resources["AppBarButtonBackground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 15, 134, 128));
+            button.Resources["AppBarButtonBackgroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 29, 153, 146));
+            button.Resources["AppBarButtonBackgroundPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 12, 111, 106));
+            button.Resources["AppBarButtonForeground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 248, 255, 255));
+            button.Resources["AppBarButtonForegroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 248, 255, 255));
+            button.Resources["AppBarButtonForegroundPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 244, 253, 255));
+        }
+        else
+        {
+            var subtle = tier == ButtonVisualTier.Secondary
+                ? Microsoft.UI.ColorHelper.FromArgb(178, 237, 247, 252)
+                : Microsoft.UI.ColorHelper.FromArgb(120, 245, 251, 255);
+            var subtlePointer = tier == ButtonVisualTier.Secondary
+                ? Microsoft.UI.ColorHelper.FromArgb(210, 228, 241, 248)
+                : Microsoft.UI.ColorHelper.FromArgb(190, 234, 246, 252);
+            var subtlePressed = tier == ButtonVisualTier.Secondary
+                ? Microsoft.UI.ColorHelper.FromArgb(220, 216, 234, 242)
+                : Microsoft.UI.ColorHelper.FromArgb(200, 224, 240, 248);
+            button.Background = new SolidColorBrush(subtle);
+            button.BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(160, 93, 128, 142));
+            button.BorderThickness = new Thickness(1);
+            button.CornerRadius = new CornerRadius(8);
+            button.Resources["AppBarButtonBackground"] = new SolidColorBrush(subtle);
+            button.Resources["AppBarButtonBackgroundPointerOver"] = new SolidColorBrush(subtlePointer);
+            button.Resources["AppBarButtonBackgroundPressed"] = new SolidColorBrush(subtlePressed);
+            button.Resources["AppBarButtonForeground"] = new SolidColorBrush(palette.Foreground);
+            button.Resources["AppBarButtonForegroundPointerOver"] = new SolidColorBrush(InkLabel);
+            button.Resources["AppBarButtonForegroundPressed"] = new SolidColorBrush(InkStrong);
+        }
+
+        return button;
     }
 
     private static TextBlock CreateSectionLabel(string text)
@@ -995,11 +1899,24 @@ public sealed partial class MainPage : Page
         {
             Text = text,
             FontFamily = BodyFont,
-            FontSize = 14,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            Foreground = new SolidColorBrush(InkLabel),
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(InkStrong),
             Margin = new Thickness(0, 2, 0, 2),
         };
+    }
+
+    private static ToggleSwitch CreateMacroPolicyToggle(string header, string bindingPath)
+    {
+        var toggle = new ToggleSwitch
+        {
+            Header = header,
+            FontFamily = BodyFont,
+            FontSize = 11,
+            MinWidth = 92,
+        };
+        toggle.SetBinding(ToggleSwitch.IsOnProperty, CreateBinding(bindingPath, BindingMode.TwoWay));
+        return toggle;
     }
 
     private FrameworkElement BuildPreviewControl()
@@ -1030,8 +1947,6 @@ public sealed partial class MainPage : Page
     {
         try
         {
-            _toolbarReflowReady = true;
-            ReflowAdaptiveToolbars();
             await _viewModel.InitializeAsync();
             await EnsurePreviewInitializedAsync();
             await PushViewModelContentToEditorAsync();
@@ -1089,14 +2004,11 @@ public sealed partial class MainPage : Page
     }
     private void RefreshTriggerPanel()
     {
-        _triggerItemsPanel.Children.Clear();
-
         var snippet = _viewModel.SelectedSnippet?.Source;
         if (snippet is null)
         {
             _triggerSummaryText.Text = "Keine Auswahl";
             _triggerTargetText.Text = "Zielprozess: -";
-            _triggerItemsPanel.Children.Add(BuildHintCard("Waehle einen Baustein, um Trigger, Scope und Zielprozess zu sehen."));
             return;
         }
 
@@ -1115,17 +2027,6 @@ public sealed partial class MainPage : Page
         _triggerTargetText.Text = distinctTargets.Count == 0
             ? "Zielprozess: alle Anwendungen"
             : $"Zielprozess: {string.Join(" | ", distinctTargets)}";
-
-        if (triggers.Count == 0)
-        {
-            _triggerItemsPanel.Children.Add(BuildHintCard("Fuer diesen Baustein sind noch keine Trigger-Regeln gespeichert."));
-            return;
-        }
-
-        foreach (var trigger in triggers.OrderByDescending(t => t.Enabled).ThenBy(t => t.Type.ToString()))
-        {
-            _triggerItemsPanel.Children.Add(BuildTriggerItem(trigger));
-        }
     }
 
     private UIElement BuildTriggerItem(TriggerRule trigger)
@@ -1222,16 +2123,44 @@ public sealed partial class MainPage : Page
     private static void ApplyInputChrome(Control control)
     {
         var foreground = new SolidColorBrush(InkStrong);
-        control.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(248, 253, 255, 255));
+        var background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(248, 253, 255, 255));
+        var border = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(178, 74, 111, 127));
+        var borderFocused = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 30, 119, 121));
         control.BorderBrush = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(178, 74, 111, 127));
         control.BorderThickness = new Thickness(1);
+        control.Background = background;
         control.Foreground = foreground;
-        var headerForeground = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 41, 77, 92));
-        control.Resources["TextControlPlaceholderForeground"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 71, 107, 122));
+        var headerForeground = new SolidColorBrush(InkLabel);
+        var placeholderForeground = new SolidColorBrush(InputPlaceholder);
+        control.Resources["TextControlPlaceholderForeground"] = placeholderForeground;
+        control.Resources["TextControlPlaceholderForegroundFocused"] = placeholderForeground;
         control.Resources["TextControlForeground"] = foreground;
-        control.Resources["TextControlBackground"] = control.Background;
-        control.Resources["TextControlBorderBrush"] = control.BorderBrush;
+        control.Resources["TextControlForegroundFocused"] = foreground;
+        control.Resources["TextControlForegroundPointerOver"] = foreground;
+        control.Resources["TextControlBackground"] = background;
+        control.Resources["TextControlBackgroundPointerOver"] = background;
+        control.Resources["TextControlBackgroundFocused"] = background;
+        control.Resources["TextControlBorderBrush"] = border;
+        control.Resources["TextControlBorderBrushPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(210, 59, 109, 127));
+        control.Resources["TextControlBorderBrushFocused"] = borderFocused;
         control.Resources["TextControlHeaderForeground"] = headerForeground;
+        control.Resources["TextBoxBackground"] = background;
+        control.Resources["TextBoxBackgroundPointerOver"] = background;
+        control.Resources["TextBoxBackgroundFocused"] = background;
+        control.Resources["TextBoxForeground"] = foreground;
+        control.Resources["TextBoxForegroundFocused"] = foreground;
+        control.Resources["TextBoxForegroundPointerOver"] = foreground;
+
+        void ApplyFocusedState(bool focused)
+        {
+            control.Background = background;
+            control.Foreground = foreground;
+            control.BorderBrush = focused ? borderFocused : border;
+        }
+
+        control.GotFocus += (_, _) => ApplyFocusedState(true);
+        control.LostFocus += (_, _) => ApplyFocusedState(false);
+        ApplyFocusedState(false);
         control.UseSystemFocusVisuals = true;
     }
 
@@ -1274,11 +2203,11 @@ public sealed partial class MainPage : Page
             ButtonVisualTier.Tertiary => (
                 Microsoft.UI.ColorHelper.FromArgb(36, 255, 255, 255),
                 Microsoft.UI.ColorHelper.FromArgb(112, 86, 120, 136),
-                Microsoft.UI.ColorHelper.FromArgb(255, 51, 82, 96)),
+                Microsoft.UI.ColorHelper.FromArgb(255, 34, 65, 79)),
             _ => (
                 Microsoft.UI.ColorHelper.FromArgb(244, 239, 248, 252),
                 Microsoft.UI.ColorHelper.FromArgb(176, 69, 106, 122),
-                Microsoft.UI.ColorHelper.FromArgb(255, 28, 63, 78)),
+                Microsoft.UI.ColorHelper.FromArgb(255, 24, 60, 76)),
         };
     }
     private static Border CreateBadge(string text, Windows.UI.Color background, Windows.UI.Color foreground)
@@ -1293,7 +2222,7 @@ public sealed partial class MainPage : Page
             {
                 Text = text,
                 FontFamily = BodyFont,
-                FontSize = 11,
+                FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(safeForeground),
             },
@@ -1404,8 +2333,8 @@ public sealed partial class MainPage : Page
     private void ApplyResponsiveLayout(double width)
     {
         var effective = width > 0 ? width : 1400;
-        var stackedLayout = effective < 1300;
-        var compact = effective < 980;
+        var stackedLayout = effective < 1200;
+        var compact = effective < 920;
         var wide = effective >= 1620;
 
         _headerCard.Margin = compact
@@ -1455,7 +2384,7 @@ public sealed partial class MainPage : Page
         else
         {
             _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(wide ? 320 : 280) });
-            _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(wide ? 460 : 390) });
+            _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(wide ? 470 : 410) });
             _mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             _mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
@@ -1469,10 +2398,9 @@ public sealed partial class MainPage : Page
             Grid.SetRow(_rightColumnGrid, 0);
 
             _rightColumnGrid.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
-            _rightColumnGrid.RowDefinitions[1].Height = new GridLength(wide ? 220 : 180);
+            _rightColumnGrid.RowDefinitions[1].Height = new GridLength(wide ? 250 : 220);
         }
 
-        ReflowAdaptiveToolbars();
     }
 
     private void ConfigureHeaderLayout(bool stackedLayout)
@@ -1495,6 +2423,7 @@ public sealed partial class MainPage : Page
             _headerRightPanel.HorizontalAlignment = HorizontalAlignment.Left;
             _shellStatusText.HorizontalAlignment = HorizontalAlignment.Left;
             _shellStatusText.MaxWidth = double.PositiveInfinity;
+            _shellStatusText.FontSize = 14;
         }
         else
         {
@@ -1509,40 +2438,41 @@ public sealed partial class MainPage : Page
             _headerRightPanel.HorizontalAlignment = HorizontalAlignment.Right;
             _shellStatusText.HorizontalAlignment = HorizontalAlignment.Right;
             _shellStatusText.MaxWidth = 420;
+            _shellStatusText.FontSize = 15;
         }
     }
 
     private void ApplyDensityByWidth(double width)
     {
-        var compact = width < 980;
-        var stacked = width < 1300;
-        var medium = width >= 980 && width < 1300;
+        var compact = width < 920;
+        var stacked = width < 1200;
+        var medium = width >= 920 && width < 1200;
 
         if (_folderList is not null)
         {
-            _folderList.MinHeight = compact ? 150 : stacked ? 190 : 260;
-            _folderList.MaxHeight = compact ? 300 : medium ? 420 : 760;
+            _folderList.MinHeight = compact ? 120 : stacked ? 130 : 140;
+            _folderList.MaxHeight = compact ? 190 : medium ? 220 : 250;
         }
 
         if (_snippetList is not null)
         {
-            _snippetList.MinHeight = compact ? 190 : stacked ? 250 : 340;
-            _snippetList.MaxHeight = compact ? 340 : medium ? 520 : 780;
+            _snippetList.MinHeight = compact ? 150 : stacked ? 180 : 220;
+            _snippetList.MaxHeight = compact ? 320 : medium ? 420 : 560;
         }
 
         if (_editorSplitGrid is not null)
         {
-            _editorSplitGrid.MinHeight = compact ? 230 : stacked ? 290 : 350;
+            _editorSplitGrid.MinHeight = compact ? 260 : stacked ? 300 : 340;
         }
 
         if (_documentPreview is not null)
         {
-            _documentPreview.MinHeight = compact ? 72 : 88;
+            _documentPreview.MinHeight = compact ? 92 : 132;
         }
 
         if (_clipboardPreview is not null)
         {
-            _clipboardPreview.MinHeight = compact ? 72 : 88;
+            _clipboardPreview.MinHeight = compact ? 92 : 132;
         }
 
         if (_insertToolsExpander is not null && compact)

@@ -5,38 +5,78 @@ using Texty.Core.Models;
 
 namespace Texty.AI.Providers;
 
-public abstract class ApiKeyHttpAiProvider : IAiProvider
+public abstract class ApiKeyHttpAiProvider : IAiProvider, IAiHealthCheckProvider
 {
     private readonly HttpClient _httpClient;
-    private readonly string _apiKeyEnvironmentVariable;
-    private readonly string _endpoint;
+    private readonly string? _apiKeyEnvironmentVariable;
+    private readonly string _defaultEndpoint;
+    private readonly string? _endpointEnvironmentVariable;
+    private readonly bool _requireApiKey;
 
-    protected ApiKeyHttpAiProvider(HttpClient httpClient, string apiKeyEnvironmentVariable, string endpoint)
+    protected ApiKeyHttpAiProvider(
+        HttpClient httpClient,
+        string? apiKeyEnvironmentVariable,
+        string endpoint,
+        string? endpointEnvironmentVariable = null,
+        bool requireApiKey = true)
     {
         _httpClient = httpClient;
         _apiKeyEnvironmentVariable = apiKeyEnvironmentVariable;
-        _endpoint = endpoint;
+        _defaultEndpoint = endpoint;
+        _endpointEnvironmentVariable = endpointEnvironmentVariable;
+        _requireApiKey = requireApiKey;
     }
 
     public abstract string Name { get; }
 
     protected virtual string DefaultModel => "default";
+    protected virtual string HealthPath => "/models";
 
-    protected virtual IDictionary<string, string> BuildHeaders(string apiKey) =>
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    protected string Endpoint => ResolveEndpoint();
+
+    protected virtual string ResolveEndpoint()
+    {
+        if (!string.IsNullOrWhiteSpace(_endpointEnvironmentVariable))
+        {
+            var configuredEndpoint = Environment.GetEnvironmentVariable(_endpointEnvironmentVariable!)?.Trim();
+            if (!string.IsNullOrWhiteSpace(configuredEndpoint))
+            {
+                return configuredEndpoint;
+            }
+        }
+
+        return _defaultEndpoint;
+    }
+
+    protected virtual string? ResolveApiKey()
+    {
+        return string.IsNullOrWhiteSpace(_apiKeyEnvironmentVariable)
+            ? null
+            : Environment.GetEnvironmentVariable(_apiKeyEnvironmentVariable!);
+    }
+
+    protected virtual IDictionary<string, string> BuildHeaders(string? apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["Authorization"] = $"Bearer {apiKey}",
         };
+    }
 
     public virtual async Task<AiResponse> GenerateAsync(AiRequest request, CancellationToken cancellationToken = default)
     {
-        var apiKey = Environment.GetEnvironmentVariable(_apiKeyEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(apiKey))
+        var apiKey = ResolveApiKey();
+        if (_requireApiKey && string.IsNullOrWhiteSpace(apiKey))
         {
             return new AiResponse(Name, request.Model ?? DefaultModel, $"[{Name} stub] {request.Prompt}");
         }
 
-        using var message = new HttpRequestMessage(HttpMethod.Post, _endpoint)
+        using var message = new HttpRequestMessage(HttpMethod.Post, Endpoint)
         {
             Content = JsonContent.Create(new
             {
@@ -70,5 +110,37 @@ public abstract class ApiKeyHttpAiProvider : IAiProvider
             .GetString() ?? string.Empty;
 
         return new AiResponse(Name, request.Model ?? DefaultModel, text);
+    }
+
+    public virtual async Task<AiProviderHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
+    {
+        var apiKey = ResolveApiKey();
+        if (_requireApiKey && string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new AiProviderHealthResult(Name, false, $"Missing API key environment variable '{_apiKeyEnvironmentVariable}'.");
+        }
+
+        if (!Uri.TryCreate(Endpoint, UriKind.Absolute, out var endpointUri))
+        {
+            return new AiProviderHealthResult(Name, false, $"Invalid endpoint '{Endpoint}'.");
+        }
+
+        var healthUri = new Uri(endpointUri, HealthPath);
+        try
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Get, healthUri);
+            foreach (var header in BuildHeaders(apiKey))
+            {
+                message.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            using var response = await _httpClient.SendAsync(message, cancellationToken);
+            var ok = response.IsSuccessStatusCode;
+            return new AiProviderHealthResult(Name, ok, ok ? "ok" : $"{(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new AiProviderHealthResult(Name, false, ex.Message);
+        }
     }
 }

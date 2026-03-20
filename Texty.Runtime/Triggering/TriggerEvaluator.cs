@@ -1,5 +1,6 @@
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
+using Texty.Core.Utilities;
 
 namespace Texty.Runtime.Triggering;
 
@@ -65,10 +66,22 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
                     ? System.Text.RegularExpressions.RegexOptions.None
                     : System.Text.RegularExpressions.RegexOptions.IgnoreCase),
             TriggerType.Autotext => input.EndsWith(rule.Pattern, comparison),
-            TriggerType.Hotkey => string.Equals(input, rule.Pattern, comparison),
+            TriggerType.Hotkey => MatchesHotkey(input, rule.Pattern, comparison),
             TriggerType.Clipboard => input.Contains(rule.Pattern, comparison),
             _ => false,
         };
+    }
+
+    private static bool MatchesHotkey(string input, string pattern, StringComparison comparison)
+    {
+        var normalizedInput = HotkeyComboNormalizer.Normalize(input);
+        var normalizedPattern = HotkeyComboNormalizer.Normalize(pattern);
+        if (string.IsNullOrWhiteSpace(normalizedInput) || string.IsNullOrWhiteSpace(normalizedPattern))
+        {
+            return false;
+        }
+
+        return string.Equals(normalizedInput, normalizedPattern, comparison);
     }
 
     private static bool MatchesTargetProcess(string? expectedProcess, string? actualProcess)
