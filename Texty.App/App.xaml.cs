@@ -36,13 +36,13 @@ namespace Texty.App
             }
             catch (Exception ex)
             {
-                Trace.TraceError(ex.ToString());
-                var startupLogPath = WriteStartupExceptionLog(ex);
 #if DEBUG
                 const bool showDiagnostics = true;
 #else
                 const bool showDiagnostics = false;
 #endif
+                Trace.TraceError(BuildStartupLogMessage(ex, showDiagnostics));
+                var startupLogPath = WriteStartupExceptionLog(ex, showDiagnostics);
                 window.Content = BuildStartupErrorView(ex, showDiagnostics, startupLogPath);
             }
 
@@ -102,7 +102,7 @@ namespace Texty.App
             return $"{fallbackMessage}{Environment.NewLine}Logdatei: {startupLogPath}";
         }
 
-        private static string? WriteStartupExceptionLog(Exception ex)
+        private static string? WriteStartupExceptionLog(Exception ex, bool includeDiagnostics)
         {
             try
             {
@@ -114,11 +114,26 @@ namespace Texty.App
 
                 var logsDirectory = Path.Combine(localAppData, "Texty", "Logs");
                 Directory.CreateDirectory(logsDirectory);
+                var cutoff = DateTime.UtcNow.AddDays(-30);
+                foreach (var file in Directory.EnumerateFiles(logsDirectory, "startup-*.log"))
+                {
+                    try
+                    {
+                        if (File.GetLastWriteTimeUtc(file) < cutoff)
+                        {
+                            File.Delete(file);
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore retention cleanup failures.
+                    }
+                }
 
                 var logPath = Path.Combine(logsDirectory, $"startup-{DateTime.UtcNow:yyyyMMdd}.log");
                 var builder = new StringBuilder();
                 builder.AppendLine($"[{DateTimeOffset.UtcNow:O}] Startup exception");
-                builder.AppendLine(ex.ToString());
+                builder.AppendLine(BuildStartupLogMessage(ex, includeDiagnostics));
                 builder.AppendLine(new string('-', 80));
                 File.AppendAllText(logPath, builder.ToString(), Encoding.UTF8);
                 return logPath;
@@ -127,6 +142,16 @@ namespace Texty.App
             {
                 return null;
             }
+        }
+
+        private static string BuildStartupLogMessage(Exception ex, bool includeDiagnostics)
+        {
+            if (includeDiagnostics)
+            {
+                return ex.ToString();
+            }
+
+            return $"Type={ex.GetType().FullName}; HResult=0x{ex.HResult:X8}; Message={ex.Message}";
         }
     }
 }

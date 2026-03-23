@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using Microsoft.Office.Core;
 using Outlook = Microsoft.Office.Interop.Outlook;
 using Texty.OutlookAddin;
@@ -76,11 +77,7 @@ public partial class ThisAddIn
                 return;
             }
 
-            var existingBody = mailItem.Body ?? string.Empty;
-            if (!existingBody.StartsWith(greeting, StringComparison.OrdinalIgnoreCase))
-            {
-                mailItem.Body = greeting + Environment.NewLine + Environment.NewLine + existingBody;
-            }
+            PrependGreeting(mailItem, greeting);
         }
         catch (Exception ex)
         {
@@ -115,16 +112,11 @@ public partial class ThisAddIn
                 return;
             }
 
-            var body = mailItem.Body ?? string.Empty;
-            if (!body.StartsWith(greeting, StringComparison.OrdinalIgnoreCase))
-            {
-                mailItem.Body = greeting + Environment.NewLine + Environment.NewLine + body;
-            }
+            PrependGreeting(mailItem, greeting);
         }
         catch (Exception ex)
         {
             Trace.TraceWarning($"OnItemSend greeting injection failed: {ex.Message}");
-            cancel = false;
         }
     }
 
@@ -202,6 +194,29 @@ public partial class ThisAddIn
         {
             Trace.TraceWarning($"SafeGet failed: {ex.Message}");
             return null;
+        }
+    }
+
+    private static void PrependGreeting(Outlook.MailItem mailItem, string greeting)
+    {
+        if (mailItem.BodyFormat is Outlook.OlBodyFormat.olFormatHTML or Outlook.OlBodyFormat.olFormatRichText)
+        {
+            var htmlBody = mailItem.HTMLBody ?? string.Empty;
+            var encodedGreeting = WebUtility.HtmlEncode(greeting);
+            if (htmlBody.Contains(encodedGreeting, StringComparison.OrdinalIgnoreCase) ||
+                htmlBody.Contains(greeting, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            mailItem.HTMLBody = $"<p>{encodedGreeting}</p>{htmlBody}";
+            return;
+        }
+
+        var body = mailItem.Body ?? string.Empty;
+        if (!body.StartsWith(greeting, StringComparison.OrdinalIgnoreCase))
+        {
+            mailItem.Body = greeting + Environment.NewLine + Environment.NewLine + body;
         }
     }
 }

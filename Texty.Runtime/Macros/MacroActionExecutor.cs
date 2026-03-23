@@ -154,15 +154,31 @@ public sealed class MacroActionExecutor : IMacroActionExecutor
         }
 
         var path = request.Arguments[0];
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+        }
+        catch (Exception ex)
+        {
+            return new MacroActionResult(false, false, $"Invalid target path: {ex.Message}", path);
+        }
+
+        var allowedBaseDirectory = Path.GetFullPath(ResolveAllowedWriteBaseDirectory());
+        if (!IsPathInsideBaseDirectory(fullPath, allowedBaseDirectory))
+        {
+            return new MacroActionResult(false, false, "Path outside allowed base folder.", fullPath);
+        }
+
         var content = string.Join(' ', request.Arguments.Skip(1));
-        var directory = Path.GetDirectoryName(path);
+        var directory = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
-        await File.WriteAllTextAsync(path, content, cancellationToken);
-        return new MacroActionResult(true, false, "File written.", path);
+        await File.WriteAllTextAsync(fullPath, content, cancellationToken);
+        return new MacroActionResult(true, false, "File written.", fullPath);
     }
 
     private static Task<MacroActionResult> NotifyAsync(MacroActionRequest request, CancellationToken cancellationToken)
@@ -242,5 +258,38 @@ public sealed class MacroActionExecutor : IMacroActionExecutor
         {
             return new MacroActionResult(false, false, ex.Message);
         }
+    }
+
+    private static string ResolveAllowedWriteBaseDirectory()
+    {
+        var configured = Environment.GetEnvironmentVariable("TEXTY_MACRO_WRITE_BASE_DIR");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured.Trim();
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Texty",
+            "data",
+            "exports");
+    }
+
+    private static bool IsPathInsideBaseDirectory(string candidatePath, string baseDirectory)
+    {
+        var relativePath = Path.GetRelativePath(baseDirectory, candidatePath);
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return true;
+        }
+
+        if (relativePath.Equals("..", StringComparison.Ordinal) ||
+            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+            relativePath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return !Path.IsPathRooted(relativePath);
     }
 }

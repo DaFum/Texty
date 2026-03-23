@@ -49,7 +49,9 @@ public static class TextyRuntimeBootstrap
         await searchIndex.RebuildAsync(await snippetRepository.GetAllAsync(cancellationToken), cancellationToken);
 
         var triggerEvaluator = new TriggerEvaluator();
-        var foregroundProcessProvider = new WindowsForegroundProcessProvider();
+        IForegroundProcessProvider? foregroundProcessProvider = OperatingSystem.IsWindows()
+            ? new WindowsForegroundProcessProvider()
+            : null;
         IClipboardGateway clipboardGateway = OperatingSystem.IsWindows()
             ? new WindowsClipboardGateway()
             : new InMemoryClipboardGateway();
@@ -59,8 +61,8 @@ public static class TextyRuntimeBootstrap
         ITriggerProvider triggerProvider;
         if (OperatingSystem.IsWindows())
         {
-            var hotkeyProvider = new WindowsKeyboardHookTriggerProvider(foregroundProcessProvider);
-            var clipboardProvider = new ClipboardTriggerProvider(clipboardGateway, foregroundProcessProvider);
+            var hotkeyProvider = new WindowsKeyboardHookTriggerProvider(foregroundProcessProvider!);
+            var clipboardProvider = new ClipboardTriggerProvider(clipboardGateway, foregroundProcessProvider!);
             triggerProvider = new CompositeTriggerProvider("WindowsCompositeTriggerProvider", [hotkeyProvider, clipboardProvider]);
         }
         else
@@ -111,7 +113,9 @@ public static class TextyRuntimeBootstrap
                 [$"{Environment.UserDomainName}\\{Environment.UserName}"] = RoleName.Owner,
             });
         var licenseService = new InMemoryLicenseService();
-        var secretProtector = new DpapiSecretProtector();
+        ISecretProtector secretProtector = OperatingSystem.IsWindows()
+            ? new DpapiSecretProtector()
+            : new NoOpSecretProtector();
         var sync = new FolderSyncOrchestrator();
 
         var maintenance = new SnippetMaintenanceService(snippetRepository, searchIndex);
@@ -182,7 +186,7 @@ public static class TextyRuntimeBootstrap
         CancellationToken cancellationToken)
     {
         var folderList = await folders.GetAllAsync(cancellationToken);
-        if (!folderList.Any())
+        if (!folderList.Any(f => f.Id == DefaultFolderId))
         {
             var now = DateTimeOffset.UtcNow;
             await folders.SaveAsync(

@@ -18,17 +18,18 @@ public sealed class AnthropicProvider : IAiProvider, IAiHealthCheckProvider
 
     public async Task<AiResponse> GenerateAsync(AiRequest request, CancellationToken cancellationToken = default)
     {
+        var model = request.Model ?? "claude-3-5-sonnet-latest";
         var apiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return new AiResponse(Name, request.Model ?? "claude-3-5-sonnet-latest", $"[{Name} stub] {request.Prompt}");
+            return new AiResponse(Name, model, $"[{Name} stub] {request.Prompt}");
         }
 
         using var message = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages")
         {
             Content = JsonContent.Create(new
             {
-                model = request.Model ?? "claude-3-5-sonnet-latest",
+                model,
                 max_tokens = 1024,
                 temperature = request.Temperature ?? 0.2,
                 system = request.SystemPrompt ?? "You are a helpful assistant.",
@@ -42,17 +43,50 @@ public sealed class AnthropicProvider : IAiProvider, IAiHealthCheckProvider
         message.Headers.TryAddWithoutValidation("x-api-key", apiKey);
         message.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
 
-        using var response = await _httpClient.SendAsync(message, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            return new AiResponse(Name, request.Model ?? "claude-3-5-sonnet-latest", $"[{Name} error] {response.StatusCode}: {body}");
-        }
+            using var response = await _httpClient.SendAsync(message, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new AiResponse(Name, model, $"[{Name} error] {response.StatusCode}: {body}");
+            }
 
-        using var doc = JsonDocument.Parse(body);
-        var first = doc.RootElement.GetProperty("content")[0];
-        var text = first.GetProperty("text").GetString() ?? string.Empty;
-        return new AiResponse(Name, request.Model ?? "claude-3-5-sonnet-latest", text);
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("content", out var content) ||
+                content.ValueKind != JsonValueKind.Array ||
+                content.GetArrayLength() == 0)
+            {
+                return new AiResponse(Name, model, $"[{Name} error] Unexpected response schema.");
+            }
+
+            string text = string.Empty;
+            foreach (var block in content.EnumerateArray())
+            {
+                if (!block.TryGetProperty("type", out var typeElement) ||
+                    !string.Equals(typeElement.GetString(), "text", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (block.TryGetProperty("text", out var textElement) &&
+                    textElement.ValueKind == JsonValueKind.String)
+                {
+                    text = textElement.GetString() ?? string.Empty;
+                    break;
+                }
+            }
+
+            return new AiResponse(Name, model, text);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new AiResponse(Name, model, $"[{Name} error] {ex.Message}");
+        }
     }
 
     public async Task<AiProviderHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
@@ -79,4 +113,3 @@ public sealed class AnthropicProvider : IAiProvider, IAiHealthCheckProvider
         }
     }
 }
-

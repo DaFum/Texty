@@ -88,12 +88,19 @@ public sealed record TemplateFieldDesignerItemModel(
             return string.Empty;
         }
 
+        var separator = options.Any(option =>
+                option.Key.Contains('\n', StringComparison.Ordinal) ||
+                option.Key.Contains('\r', StringComparison.Ordinal) ||
+                option.Label.Contains('\n', StringComparison.Ordinal) ||
+                option.Label.Contains('\r', StringComparison.Ordinal))
+            ? Environment.NewLine
+            : "; ";
+
         return string.Join(
-            "; ",
+            separator,
             options.Select(option =>
                 string.Equals(option.Key, option.Label, StringComparison.Ordinal)
                     ? option.Key
                     : $"{option.Key}:{option.Label}"));
     }
 }
-

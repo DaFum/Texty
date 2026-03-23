@@ -1,4 +1,5 @@
 using Texty.AI;
+using System.Diagnostics;
 using Texty.Core.Interfaces;
 using Texty.Integrations;
 using Texty.OutlookAddin;
@@ -54,15 +55,27 @@ public sealed record TextyRuntimeContext(
             return;
         }
 
-        _disposed = true;
         var tracked = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        foreach (var candidate in EnumerateDisposableCandidates())
+        var candidates = EnumerateDisposableCandidates().ToList();
+        for (var i = candidates.Count - 1; i >= 0; i--)
         {
-            if (candidate is IDisposable disposable && tracked.Add(candidate))
+            var candidate = candidates[i];
+            if (candidate is not IDisposable disposable || !tracked.Add(candidate))
+            {
+                continue;
+            }
+
+            try
             {
                 disposable.Dispose();
             }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"RuntimeContext dispose failed for '{candidate.GetType().Name}': {ex.Message}");
+            }
         }
+
+        _disposed = true;
     }
 
     private IEnumerable<object> EnumerateDisposableCandidates()

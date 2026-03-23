@@ -33,15 +33,25 @@ $msbuild = Resolve-MSBuild
 Write-Host "Using MSBuild: $msbuild"
 Write-Host "Publishing signed ClickOnce manifest to: $PublishDir"
 
-& $msbuild $projectPath `
-    /t:Publish `
-    /p:Configuration=$Configuration `
-    /p:Platform=$Platform `
-    /p:PublishDir="$PublishDir\" `
-    /p:SignManifests=true `
-    /p:ManifestKeyFile="$certPath" `
-    /p:ManifestCertificatePassword="$certPassword" `
-    /m
+$responseFile = Join-Path $env:TEMP "texty-vsto-publish-$([Guid]::NewGuid().ToString('N')).rsp"
+try {
+    @"
+/p:ManifestCertificatePassword=$certPassword
+"@ | Set-Content -Path $responseFile -Encoding utf8
+
+    & $msbuild $projectPath `
+        /t:Publish `
+        /p:Configuration=$Configuration `
+        /p:Platform=$Platform `
+        /p:PublishDir="$PublishDir\" `
+        /p:SignManifests=true `
+        /p:ManifestKeyFile="$certPath" `
+        "@$responseFile" `
+        /m
+}
+finally {
+    Remove-Item -Path $responseFile -Force -ErrorAction SilentlyContinue
+}
 
 if ($LASTEXITCODE -ne 0) {
     throw "VSTO publish failed with exit code $LASTEXITCODE."

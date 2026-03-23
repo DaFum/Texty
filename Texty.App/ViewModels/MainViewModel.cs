@@ -14,6 +14,8 @@ public partial class MainViewModel : BaseViewModel
 {
     private TextyRuntimeContext? _runtime;
     private CancellationTokenSource? _loadSnippetsCts;
+    private long _snippetLoadRequestCounter;
+    private long _latestSnippetLoadRequestId;
     private Guid? _editingTriggerRuleId;
     private string? _editingTemplateFieldKey;
 
@@ -217,13 +219,13 @@ public partial class MainViewModel : BaseViewModel
     private string _macroAuditText = string.Empty;
 
     [ObservableProperty]
-    private bool _macroAllowProcessStart = true;
+    private bool _macroAllowProcessStart;
 
     [ObservableProperty]
-    private bool _macroAllowFileSystemWrite = true;
+    private bool _macroAllowFileSystemWrite;
 
     [ObservableProperty]
-    private bool _macroAllowExternalOpen = true;
+    private bool _macroAllowExternalOpen;
 
     [ObservableProperty]
     private bool _macroAllowNotifications = true;
@@ -1115,7 +1117,13 @@ public partial class MainViewModel : BaseViewModel
             return;
         }
 
-        var versions = await _runtime.VersionRepository.GetVersionsAsync(SelectedSnippet.Id);
+        var selectedSnippetId = SelectedSnippet.Id;
+        var versions = await _runtime.VersionRepository.GetVersionsAsync(selectedSnippetId);
+        if (SelectedSnippet?.Id != selectedSnippetId)
+        {
+            return;
+        }
+
         VersionEntries.Clear();
         foreach (var version in versions.OrderByDescending(x => x.VersionNumber))
         {
@@ -1232,10 +1240,7 @@ public partial class MainViewModel : BaseViewModel
 
         var corrected = _runtime.TextCorrectionService.ApplyCorrections(EditorPlainText);
         EditorPlainText = corrected;
-        if (string.IsNullOrWhiteSpace(EditorHtmlText))
-        {
-            EditorHtmlText = corrected;
-        }
+        EditorHtmlText = NormalizePlainTextToHtml(corrected);
 
         StatusText = "Rechtschreib-/Autokorrektur angewendet.";
         return Task.CompletedTask;
@@ -1280,7 +1285,9 @@ public partial class MainViewModel : BaseViewModel
 
         var latest = history[0];
         EditorPlainText = latest.PlainText ?? string.Empty;
-        EditorHtmlText = latest.HtmlText ?? latest.PlainText ?? string.Empty;
+        EditorHtmlText = !string.IsNullOrWhiteSpace(latest.HtmlText)
+            ? latest.HtmlText
+            : NormalizePlainTextToHtml(EditorPlainText);
         StatusText = "Letzten Clipboard-Eintrag in den Editor geladen.";
         return Task.CompletedTask;
     }
@@ -1457,7 +1464,7 @@ public partial class MainViewModel : BaseViewModel
         }
 
         EditorPlainText = AiResultText.Trim();
-        EditorHtmlText = AiResultText.Trim();
+        EditorHtmlText = NormalizePlainTextToHtml(EditorPlainText);
         StatusText = "KI-Ergebnis in den Editor uebernommen.";
         return Task.CompletedTask;
     }
@@ -1652,7 +1659,9 @@ public partial class MainViewModel : BaseViewModel
             return;
         }
 
-        var requestedFolderId = SelectedFolder?.Id;
+        var requestId = Interlocked.Increment(ref _snippetLoadRequestCounter);
+        Interlocked.Exchange(ref _latestSnippetLoadRequestId, requestId);
+        var requestedQueryIdentity = BuildCurrentSnippetQueryIdentity();
         var tagScope = string.IsNullOrWhiteSpace(ReplaceScopeTag) ? null : ReplaceScopeTag.Trim();
         var targetScope = string.IsNullOrWhiteSpace(ReplaceScopeTargetProcess) ? null : ReplaceScopeTargetProcess.Trim();
         var query = new SnippetSearchQuery(
@@ -1665,7 +1674,8 @@ public partial class MainViewModel : BaseViewModel
         var found = await _runtime.SnippetWorkflowService.SearchAsync(query, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (requestedFolderId != SelectedFolder?.Id)
+        if (requestId != Volatile.Read(ref _latestSnippetLoadRequestId) ||
+            !string.Equals(requestedQueryIdentity, BuildCurrentSnippetQueryIdentity(), StringComparison.Ordinal))
         {
             return;
         }
@@ -1680,6 +1690,12 @@ public partial class MainViewModel : BaseViewModel
                 item.Snippet))
             .ToList();
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (requestId != Volatile.Read(ref _latestSnippetLoadRequestId) ||
+            !string.Equals(requestedQueryIdentity, BuildCurrentSnippetQueryIdentity(), StringComparison.Ordinal))
+        {
+            return;
+        }
 
         VisibleSnippets.Clear();
         foreach (var item in rebuilt)
@@ -1699,6 +1715,29 @@ public partial class MainViewModel : BaseViewModel
 
         var stats = _runtime.ProductivityStatsService.Snapshot();
         StatusText = $"Bausteine: {VisibleSnippets.Count} | Insertions: {stats.Insertions} | Zeitersparnis: {stats.SecondsSaved}s";
+    }
+
+    private string BuildCurrentSnippetQueryIdentity()
+    {
+        return string.Join(
+            "|",
+            (SelectedFolder?.Id.ToString("N") ?? string.Empty).Trim(),
+            (SearchTerm ?? string.Empty).Trim(),
+            (ReplaceScopeTag ?? string.Empty).Trim(),
+            (ReplaceScopeTargetProcess ?? string.Empty).Trim());
+    }
+
+    private static string NormalizePlainTextToHtml(string plainText)
+    {
+        if (string.IsNullOrWhiteSpace(plainText))
+        {
+            return "<p><br/></p>";
+        }
+
+        var encoded = System.Net.WebUtility.HtmlEncode(plainText)
+            .Replace("\r\n", "<br/>", StringComparison.Ordinal)
+            .Replace("\n", "<br/>", StringComparison.Ordinal);
+        return $"<p>{encoded}</p>";
     }
 
     private async Task LoadSnippetsSafelyAsync(CancellationToken cancellationToken = default)

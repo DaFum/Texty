@@ -33,6 +33,7 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
     {
         var results = new List<InsertionStepResult>();
         ClipboardItem? snapshot = null;
+        var snapshotCaptured = false;
         var correlationId = CreateCorrelationId(context);
         ExceptionDispatchInfo? capturedException = null;
 
@@ -64,6 +65,7 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
         try
         {
             snapshot = await _clipboardGateway.SnapshotAsync(cancellationToken);
+            snapshotCaptured = true;
             results.Add(new InsertionStepResult(InsertionStep.Prepare, true, "Clipboard snapshot captured."));
             await _auditLogger.WriteAsync(
                 new AuditLogEntry(
@@ -122,7 +124,10 @@ public sealed class ClipboardInsertionPipeline : IInsertionPipeline
 
         try
         {
-            await _clipboardGateway.RestoreAsync(snapshot, cancellationToken);
+            var restoreToken = snapshotCaptured && cancellationToken.IsCancellationRequested
+                ? CancellationToken.None
+                : cancellationToken;
+            await _clipboardGateway.RestoreAsync(snapshot, restoreToken);
             results.Add(new InsertionStepResult(InsertionStep.Restore, true, "Clipboard restored."));
             await _auditLogger.WriteAsync(
                 new AuditLogEntry(

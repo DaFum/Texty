@@ -18,12 +18,14 @@ public sealed class OllamaProvider : IAiProvider, IAiHealthCheckProvider
 
     public async Task<AiResponse> GenerateAsync(AiRequest request, CancellationToken cancellationToken = default)
     {
-        var endpoint = ResolveBaseUrl().TrimEnd('/') + "/api/chat";
+        var baseUrl = ResolveBaseUrl().TrimEnd('/');
+        var model = request.Model ?? ResolveDefaultModel();
+        var endpoint = baseUrl + "/api/chat";
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = JsonContent.Create(new
             {
-                model = request.Model ?? ResolveDefaultModel(),
+                model,
                 stream = false,
                 messages = new object[]
                 {
@@ -43,7 +45,7 @@ public sealed class OllamaProvider : IAiProvider, IAiHealthCheckProvider
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                return new AiResponse(Name, request.Model ?? ResolveDefaultModel(), $"[{Name} error] {response.StatusCode}: {body}");
+                return new AiResponse(Name, model, $"[{Name} error] {response.StatusCode}: {body}");
             }
 
             using var doc = JsonDocument.Parse(body);
@@ -51,11 +53,11 @@ public sealed class OllamaProvider : IAiProvider, IAiHealthCheckProvider
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? string.Empty;
-            return new AiResponse(Name, request.Model ?? ResolveDefaultModel(), text);
+            return new AiResponse(Name, model, text);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new AiResponse(Name, request.Model ?? ResolveDefaultModel(), $"[{Name} error] {ex.Message}");
+            return new AiResponse(Name, model, $"[{Name} error] {ex.Message}");
         }
     }
 
@@ -81,4 +83,3 @@ public sealed class OllamaProvider : IAiProvider, IAiHealthCheckProvider
     private static string ResolveDefaultModel() =>
         Environment.GetEnvironmentVariable("OLLAMA_MODEL")?.Trim() ?? "llama3.1";
 }
-

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using Ganss.Xss;
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
 
@@ -9,21 +10,6 @@ namespace Texty.Runtime.Templating;
 public sealed class TemplateRenderer : ITemplateRenderer
 {
     private static readonly Regex PlaceholderRegex = new(@"\{\{\s*(?<key>[a-zA-Z0-9_.-]+)\s*\}\}", RegexOptions.Compiled);
-    private static readonly Regex ScriptRegex = new(
-        @"<\s*script\b[^>]*>[\s\S]*?<\s*/\s*script\s*>",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex DangerousTagRegex = new(
-        @"<\s*(iframe|object|embed|link|meta)\b[^>]*>[\s\S]*?(<\s*/\s*\1\s*>)?",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex InlineEventRegexQuoted = new(
-        @"\s+on\w+\s*=\s*(['""]).*?\1",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex InlineEventRegexBare = new(
-        @"\s+on\w+\s*=\s*[^\s>]+",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex JavascriptUriRegex = new(
-        @"(?i)\b(href|src)\s*=\s*(['""])\s*javascript:[^'""]*\2",
-        RegexOptions.Compiled);
 
     public Task<TemplateRenderResult> RenderAsync(Snippet snippet, RenderContext context, CancellationToken cancellationToken = default)
     {
@@ -107,12 +93,25 @@ public sealed class TemplateRenderer : ITemplateRenderer
             return string.Empty;
         }
 
-        var cleaned = html;
-        cleaned = ScriptRegex.Replace(cleaned, string.Empty);
-        cleaned = DangerousTagRegex.Replace(cleaned, string.Empty);
-        cleaned = InlineEventRegexQuoted.Replace(cleaned, string.Empty);
-        cleaned = InlineEventRegexBare.Replace(cleaned, string.Empty);
-        cleaned = JavascriptUriRegex.Replace(cleaned, "$1=\"#\"");
-        return cleaned;
+        var sanitizer = CreateSanitizer();
+        return sanitizer.Sanitize(html);
+    }
+
+    private static HtmlSanitizer CreateSanitizer()
+    {
+        var sanitizer = new HtmlSanitizer();
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.AllowedSchemes.Add("http");
+        sanitizer.AllowedSchemes.Add("https");
+        sanitizer.AllowedSchemes.Add("mailto");
+        sanitizer.AllowedSchemes.Add("data");
+
+        sanitizer.AllowedAttributes.Add("class");
+        sanitizer.AllowedAttributes.Add("data-key");
+        sanitizer.AllowedAttributes.Add("src");
+        sanitizer.AllowedAttributes.Add("alt");
+        sanitizer.AllowedAttributes.Add("title");
+
+        return sanitizer;
     }
 }

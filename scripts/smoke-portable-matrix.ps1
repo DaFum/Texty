@@ -1,7 +1,8 @@
 param(
     [string]$Configuration = "Release",
     [string]$OutputRoot = "",
-    [string[]]$RuntimeIdentifiers = @("win-x86", "win-x64", "win-arm64", "win10-x86", "win10-x64", "win10-arm64")
+    [string[]]$RuntimeIdentifiers = @("win-x86", "win-x64", "win-arm64", "win10-x86", "win10-x64", "win10-arm64"),
+    [int]$StartupTimeoutSeconds = 30
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +26,10 @@ $results = New-Object System.Collections.Generic.List[object]
 function Test-CanRunRid([string]$rid, [string]$architecture) {
     if ($rid -like "*arm64") {
         return $architecture -eq "arm64"
+    }
+
+    if ($rid -like "*x64" -and $architecture -eq "x86") {
+        return $false
     }
 
     # x86/x64 builds may run on ARM64 only when Windows-on-ARM emulation is available.
@@ -68,7 +73,7 @@ foreach ($rid in $rids) {
     $process = $null
     try {
         $process = Start-Process -FilePath $exePath -WorkingDirectory $entry.outputDir -PassThru
-        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(15)
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds($StartupTimeoutSeconds)
         $windowSeen = $false
         do {
             Start-Sleep -Milliseconds 300
@@ -93,7 +98,7 @@ foreach ($rid in $rids) {
         }
         else {
             $entry.smoke = "failed"
-            $entry.reason = "no top-level window detected within timeout"
+            $entry.reason = "no top-level window detected within ${StartupTimeoutSeconds}s timeout"
         }
     }
     catch {

@@ -35,7 +35,15 @@ public sealed class SnippetWorkflowService : ISnippetWorkflowService
             await _snippetRepository.SaveAsync(snippet, cancellationToken);
         }
 
-        await _searchIndex.UpsertAsync(snippet, cancellationToken);
+        try
+        {
+            await _searchIndex.UpsertAsync(snippet, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"Search index upsert failed for snippet '{snippet.Id}': {ex.Message}");
+        }
+
         return snippet;
     }
 
@@ -206,8 +214,27 @@ public sealed class SnippetWorkflowService : ISnippetWorkflowService
             .Where(s => scope.FolderId is null || s.FolderId == scope.FolderId.Value)
             .Where(s => string.IsNullOrWhiteSpace(scope.Tag) || s.Tags.Any(t => string.Equals(t.Value, scope.Tag, StringComparison.OrdinalIgnoreCase)))
             .Where(s => string.IsNullOrWhiteSpace(scope.TargetProcess) ||
-                        s.Triggers.Any(t => string.Equals(t.TargetProcess, scope.TargetProcess, StringComparison.OrdinalIgnoreCase)))
+                        s.Triggers.Any(t =>
+                            t.Enabled &&
+                            !string.IsNullOrWhiteSpace(t.TargetProcess) &&
+                            string.Equals(
+                                NormalizeProcessName(t.TargetProcess),
+                                NormalizeProcessName(scope.TargetProcess),
+                                StringComparison.OrdinalIgnoreCase)))
             .Where(s => selectedIds is null || selectedIds.Contains(s.Id))
             .ToList();
+    }
+
+    private static string NormalizeProcessName(string? processName)
+    {
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return string.Empty;
+        }
+
+        var value = processName.Trim();
+        return value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? value[..^4]
+            : value;
     }
 }

@@ -70,17 +70,18 @@ public abstract class ApiKeyHttpAiProvider : IAiProvider, IAiHealthCheckProvider
 
     public virtual async Task<AiResponse> GenerateAsync(AiRequest request, CancellationToken cancellationToken = default)
     {
+        var model = request.Model ?? DefaultModel;
         var apiKey = ResolveApiKey();
         if (_requireApiKey && string.IsNullOrWhiteSpace(apiKey))
         {
-            return new AiResponse(Name, request.Model ?? DefaultModel, $"[{Name} stub] {request.Prompt}");
+            return new AiResponse(Name, model, $"[{Name} stub] {request.Prompt}");
         }
 
         using var message = new HttpRequestMessage(HttpMethod.Post, Endpoint)
         {
             Content = JsonContent.Create(new
             {
-                model = request.Model ?? DefaultModel,
+                model,
                 messages = new object[]
                 {
                     new { role = "system", content = request.SystemPrompt ?? "You are a helpful assistant." },
@@ -95,21 +96,43 @@ public abstract class ApiKeyHttpAiProvider : IAiProvider, IAiHealthCheckProvider
             message.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
-        using var response = await _httpClient.SendAsync(message, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            return new AiResponse(Name, request.Model ?? DefaultModel, $"[{Name} error] {response.StatusCode}: {body}");
+            using var response = await _httpClient.SendAsync(message, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new AiResponse(Name, model, $"[{Name} error] {response.StatusCode}: {body}");
+            }
+
+            using var document = JsonDocument.Parse(body);
+            if (!document.RootElement.TryGetProperty("choices", out var choices) ||
+                choices.ValueKind != JsonValueKind.Array ||
+                choices.GetArrayLength() == 0)
+            {
+                return CreateErrorResponse(model, "Unexpected response schema.");
+            }
+
+            var firstChoice = choices[0];
+            if (!firstChoice.TryGetProperty("message", out var messageElement) ||
+                messageElement.ValueKind != JsonValueKind.Object ||
+                !messageElement.TryGetProperty("content", out var contentElement) ||
+                contentElement.ValueKind != JsonValueKind.String)
+            {
+                return CreateErrorResponse(model, "Unexpected response schema.");
+            }
+
+            var text = contentElement.GetString() ?? string.Empty;
+            return new AiResponse(Name, model, text);
         }
-
-        using var document = JsonDocument.Parse(body);
-        var text = document.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString() ?? string.Empty;
-
-        return new AiResponse(Name, request.Model ?? DefaultModel, text);
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(model, ex.Message);
+        }
     }
 
     public virtual async Task<AiProviderHealthResult> CheckHealthAsync(CancellationToken cancellationToken = default)
@@ -125,7 +148,7 @@ public abstract class ApiKeyHttpAiProvider : IAiProvider, IAiHealthCheckProvider
             return new AiProviderHealthResult(Name, false, $"Invalid endpoint '{Endpoint}'.");
         }
 
-        var healthUri = new Uri(endpointUri, HealthPath);
+        var healthUri = BuildHealthUri(endpointUri);
         try
         {
             using var message = new HttpRequestMessage(HttpMethod.Get, healthUri);
@@ -142,5 +165,45 @@ public abstract class ApiKeyHttpAiProvider : IAiProvider, IAiHealthCheckProvider
         {
             return new AiProviderHealthResult(Name, false, ex.Message);
         }
+    }
+
+    private AiResponse CreateErrorResponse(string model, string message)
+    {
+        return new AiResponse(Name, model, $"[{Name} error] {message}");
+    }
+
+    private Uri BuildHealthUri(Uri endpointUri)
+    {
+        if (Uri.TryCreate(HealthPath, UriKind.Absolute, out var absoluteHealthUri))
+        {
+            return absoluteHealthUri;
+        }
+
+        var endpointSegments = endpointUri.AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+
+        if (endpointSegments.Count >= 2 &&
+            string.Equals(endpointSegments[^2], "chat", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(endpointSegments[^1], "completions", StringComparison.OrdinalIgnoreCase))
+        {
+            endpointSegments.RemoveRange(endpointSegments.Count - 2, 2);
+        }
+        else if (endpointSegments.Count > 0 &&
+                 string.Equals(endpointSegments[^1], "completions", StringComparison.OrdinalIgnoreCase))
+        {
+            endpointSegments.RemoveAt(endpointSegments.Count - 1);
+        }
+
+        var healthSegments = (string.IsNullOrWhiteSpace(HealthPath) ? "models" : HealthPath)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        var finalSegments = endpointSegments.Concat(healthSegments).ToArray();
+        var builder = new UriBuilder(endpointUri.Scheme, endpointUri.Host, endpointUri.IsDefaultPort ? -1 : endpointUri.Port)
+        {
+            Path = "/" + string.Join('/', finalSegments),
+        };
+
+        return builder.Uri;
     }
 }

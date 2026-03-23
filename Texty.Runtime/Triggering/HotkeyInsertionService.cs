@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Texty.Core.Interfaces;
 using Texty.Core.Models;
+using Texty.Core.Utilities;
 
 namespace Texty.Runtime.Triggering;
 
@@ -144,10 +145,14 @@ public sealed class HotkeyInsertionService
             return;
         }
 
-        var requiresCtrl = signal.Input.Contains("CTRL", StringComparison.OrdinalIgnoreCase);
-        var requiresShift = signal.Input.Contains("SHIFT", StringComparison.OrdinalIgnoreCase);
-        var requiresAlt = signal.Input.Contains("ALT", StringComparison.OrdinalIgnoreCase);
-        var requiresWin = signal.Input.Contains("WIN", StringComparison.OrdinalIgnoreCase);
+        var normalizedHotkey = HotkeyComboNormalizer.Normalize(signal.Input);
+        var tokens = normalizedHotkey
+            .Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var requiresCtrl = tokens.Contains("CTRL");
+        var requiresShift = tokens.Contains("SHIFT");
+        var requiresAlt = tokens.Contains("ALT");
+        var requiresWin = tokens.Contains("WIN");
         if (!requiresCtrl && !requiresShift && !requiresAlt && !requiresWin)
         {
             return;

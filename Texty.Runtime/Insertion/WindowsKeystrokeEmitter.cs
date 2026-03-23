@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Texty.Core.Interfaces;
 
 namespace Texty.Runtime.Insertion;
@@ -95,6 +96,7 @@ public sealed class WindowsKeystrokeEmitter : IKeystrokeEmitter
             var key = TryMapTokenToVirtualKey(token);
             if (key is null)
             {
+                Trace.TraceWarning($"Unknown keystroke token '{token}' in action '{action}'.");
                 return [];
             }
 

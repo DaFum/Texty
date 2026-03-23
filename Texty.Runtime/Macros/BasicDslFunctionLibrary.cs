@@ -135,7 +135,15 @@ public sealed class BasicDslFunctionLibrary : IDslFunctionLibrary
                 if (args.Count >= 2 &&
                     DateTimeOffset.TryParse(args[0], out var dateValue))
                 {
-                    result = dateValue.ToString(args[1]);
+                    try
+                    {
+                        result = dateValue.ToString(args[1]);
+                    }
+                    catch (FormatException)
+                    {
+                        result = string.Empty;
+                    }
+
                     return true;
                 }
 

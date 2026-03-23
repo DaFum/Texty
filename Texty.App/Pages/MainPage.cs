@@ -2700,7 +2700,7 @@ public sealed partial class MainPage : Page
 
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
-            @"<\s*(iframe|object|embed|link|meta)\b[^>]*>[\s\S]*?(<\s*/\s*\1\s*>)?",
+            @"<\s*(iframe|object|embed|link|meta)\b[^>]*\s*(?:\/?>|>[\s\S]*?<\s*/\s*\1\s*>)",
             string.Empty,
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
@@ -2719,6 +2719,11 @@ public sealed partial class MainPage : Page
         cleaned = System.Text.RegularExpressions.Regex.Replace(
             cleaned,
             @"(?i)\b(href|src)\s*=\s*(['""])\s*javascript:[^'""]*\2",
+            "$1=\"#\"");
+
+        cleaned = System.Text.RegularExpressions.Regex.Replace(
+            cleaned,
+            @"(?i)\b(href|src)\s*=\s*javascript:[^\s>]+",
             "$1=\"#\"");
 
         return cleaned;

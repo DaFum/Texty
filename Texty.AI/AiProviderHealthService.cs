@@ -26,7 +26,18 @@ public sealed class AiProviderHealthService
 
             if (provider is IAiHealthCheckProvider healthCheckProvider)
             {
-                results.Add(await healthCheckProvider.CheckHealthAsync(cancellationToken));
+                try
+                {
+                    results.Add(await healthCheckProvider.CheckHealthAsync(cancellationToken));
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new AiProviderHealthResult(provider.Name, false, ex.ToString()));
+                }
             }
             else
             {
@@ -37,4 +48,3 @@ public sealed class AiProviderHealthService
         return results;
     }
 }
-

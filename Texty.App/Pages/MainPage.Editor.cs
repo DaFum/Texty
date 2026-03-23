@@ -386,7 +386,7 @@ public sealed partial class MainPage
                 bindings.Add(new FormFieldBinding(field, () =>
                 {
                     return combo.SelectedItem is TemplateFieldOption selected
-                        ? selected.Label
+                        ? selected.Key
                         : null;
                 }));
                 break;
@@ -421,7 +421,7 @@ public sealed partial class MainPage
                 bindings.Add(new FormFieldBinding(field, () =>
                 {
                     var selected = buttons.FirstOrDefault(x => x.Button.IsChecked == true);
-                    return selected.Option?.Label;
+                    return selected.Option?.Key;
                 }));
                 break;
             }
@@ -614,12 +614,13 @@ public sealed partial class MainPage
 
     private static string BuildEditorShellHtml()
     {
-        return """
+        var nonce = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        var html = """
             <!doctype html>
             <html>
             <head>
             <meta charset="utf-8" />
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; script-src 'nonce-__TEXTY_NONCE__';" />
             <style>
                 html, body {
                     margin: 0;
@@ -666,7 +667,7 @@ public sealed partial class MainPage
             </head>
             <body>
                 <div id="editor" contenteditable="true"><p><br /></p></div>
-                <script>
+                <script nonce="__TEXTY_NONCE__">
                     const editor = document.getElementById('editor');
                     let suppressChange = false;
 
@@ -776,6 +777,7 @@ public sealed partial class MainPage
             </body>
             </html>
             """;
+        return html.Replace("__TEXTY_NONCE__", nonce, StringComparison.Ordinal);
     }
 
     private void OnHtmlPreviewNavigationCompleted(WebView2 sender, CoreWebView2NavigationCompletedEventArgs args)

@@ -9,6 +9,7 @@ public static class AppRuntimeService
     private static readonly object HotkeyRunnerSync = new();
     private static CancellationTokenSource? _hotkeyRunnerCts;
     private static Task? _hotkeyRunnerTask;
+    private static bool _processExitHookRegistered;
 
     public static TextyRuntimeContext? RuntimeContext { get; private set; }
 
@@ -16,6 +17,7 @@ public static class AppRuntimeService
     {
         if (RuntimeContext is not null)
         {
+            EnsureHotkeyRunner(RuntimeContext);
             return;
         }
 
@@ -25,7 +27,11 @@ public static class AppRuntimeService
             if (RuntimeContext is null)
             {
                 RuntimeContext = await TextyRuntimeBootstrap.CreateDefaultAsync(cancellationToken: cancellationToken);
-                StartHotkeyRunner(RuntimeContext);
+            }
+
+            if (RuntimeContext is not null)
+            {
+                EnsureHotkeyRunner(RuntimeContext);
             }
         }
         finally
@@ -34,10 +40,17 @@ public static class AppRuntimeService
         }
     }
 
-    private static void StartHotkeyRunner(TextyRuntimeContext context)
+    private static void EnsureHotkeyRunner(TextyRuntimeContext context)
     {
         lock (HotkeyRunnerSync)
         {
+            if (_hotkeyRunnerTask is { IsCompleted: true })
+            {
+                _hotkeyRunnerTask = null;
+                _hotkeyRunnerCts?.Dispose();
+                _hotkeyRunnerCts = null;
+            }
+
             if (_hotkeyRunnerTask is not null)
             {
                 return;
@@ -61,11 +74,6 @@ public static class AppRuntimeService
                     }
                     finally
                     {
-                        if (context.HotkeyTriggerProvider is IDisposable disposableProvider)
-                        {
-                            disposableProvider.Dispose();
-                        }
-
                         lock (HotkeyRunnerSync)
                         {
                             _hotkeyRunnerTask = null;
@@ -75,6 +83,11 @@ public static class AppRuntimeService
                     }
                 },
                 _hotkeyRunnerCts.Token);
+
+            if (_processExitHookRegistered)
+            {
+                return;
+            }
 
             AppDomain.CurrentDomain.ProcessExit += (_, _) =>
             {
@@ -93,6 +106,7 @@ public static class AppRuntimeService
                     // Ignore shutdown cancellation issues.
                 }
             };
+            _processExitHookRegistered = true;
         }
     }
 }

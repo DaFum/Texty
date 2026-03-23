@@ -34,5 +34,5 @@ public sealed class Gpt4AllProvider : ApiKeyHttpAiProvider
         return base.ResolveEndpoint();
     }
 
-    protected override string HealthPath => "/v1/models";
+    protected override string HealthPath => "/models";
 }
