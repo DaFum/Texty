@@ -1,79 +1,97 @@
 # Texty
 
-1. Textbausteinverwaltung & -erstellung
-Systemweite Nutzung: Textbausteine (inklusive Formatierungen, Tabellen und Bildern) lassen sich anwendungsübergreifend in jede Windows-Anwendung einfügen.
+WinUI-3 Desktop-App fuer systemweite Textbausteine mit JSON-First Persistenz, Trigger- und Makro-Engine, Integrationsresolvern, KI-Adaptern und portabler unpackaged Ausfuehrung.
 
-Organisation: Anlage in Ordnern/Registern, Sortieren, Verschieben, Duplizieren und Einfärben (Hervorheben/Ausblenden) von Bausteinen.
+## Implementierter Stand
 
-Suchen & Finden: Umfangreiche Suchfunktionen (inkl. Suchen und Ersetzen) sowie eine 3-Spalten-Ansicht zur besseren Übersicht.
+- WinUI-3 App (`Texty.App`) als unpackaged Runtime auf `net10.0-windows10.0.19041.0`.
+- 3-Spalten Shell (Explorer, Trefferliste, Editor/Preview) als C#-UI mit ViewModel-Bindings.
+- Domain- und API-Vertraege in `Texty.Core`:
+  - Repositories: `ISnippetRepository`, `IFolderRepository`, `IVersionRepository`, `ITrashRepository`.
+  - Trigger/Insertion: `ITriggerProvider`, `ITriggerEvaluator`, `IInsertionPipeline`.
+  - Templates/Formulare, Integrationen, KI/Translation, Macro, Security/Auth, Sync.
+- JSON-Storage in `Texty.Storage.Json`:
+  - Pro-Entity JSON-Dateien (`snippets`, `folders`, `versions`, `trash`, `assets`).
+  - Volltextnahe Suche + In-Memory Suchindex.
+- `Texty.Storage.SqlServer` bleibt als nicht-verdrahtete Zukunftsschicht im Repo vorhanden.
+- Runtime-Orchestrierung in `Texty.Runtime`:
+  - Trigger-Evaluator, Template-Renderer, Formularvalidierung.
+  - Komponierte Triggerquellen (Hotkey, Clipboard, Autotext/Regex-Textfluss via Keyboard-Hook).
+  - Transaktionale Clipboard-Insertion-Pipeline.
+  - DSL-Makroengine + optionaler PowerShell-Runner mit Trust-Gate.
+  - DPAPI-Secret-Schutz, Rollen/Lizenz-Baseline, Folder-Sync-Orchestrator.
+  - Produktivitaets-, Dokumentgenerator-, Duplikat- und Bulk-Font-Services.
+- Integrationen in `Texty.Integrations`:
+  - Resolver: `env`, `csv`, `xml` (funktional), `sql`, `ad`, `excel` (defensiver v1-Stub/Fallback).
+  - Dateiimport-Service.
+- KI in `Texty.AI`:
+  - Provideradapter: OpenAI, OpenRouter, Groq, Langdock.
+  - Translation: OpenAI-Weg.
+- Outlook-Modul in `Texty.OutlookAddin`:
+  - Separates Add-in-Modul mit Gender-O-Matic Baseline.
 
-Sicherheit & Wiederherstellung: Papierkorb für gelöschte Bausteine und eine Versionshistorie, um ältere Textstände wiederherzustellen.
+## Projektstruktur
 
-Tags & Kommentare: Bausteine können mit Metadaten (Tags) versehen und kommentiert werden.
+- `Texty.App`: WinUI Frontend und Runtime-Bootstrap.
+- `Texty.Core`: Domaintypen + Public Interfaces.
+- `Texty.Runtime`: Orchestrierung, Trigger, Macro, Security, Sync.
+- `Texty.Storage.Json`: JSON Persistenz.
+- `Texty.Storage.SqlServer`: SQL-Zukunftsschicht (derzeit nicht im Runtime-Default verdrahtet).
+- `Texty.Integrations`: Datenresolver und Import.
+- `Texty.AI`: KI- und Translation-Provider.
+- `Texty.OutlookAddin`: Outlook/Gender-O-Matic Modul.
+- `Texty.Tests`: Unit- und Contract-Tests.
 
-Mengenbearbeitung: Gleichzeitiges Ändern der Schriftart mehrerer Bausteine oder das automatische Entfernen von Duplikaten.
+## Build und Tests
 
-2. Trigger & Auslöser (Wie Texte eingefügt werden)
-Autotext & SmartComplete: Automatische Texterweiterung durch Eingabe von Kürzeln (inkl. Beachtung von Groß-/Kleinschreibung).
+Voraussetzung: lokales `dotnet` SDK in `%USERPROFILE%\\.dotnet` oder global installiert.
 
-Tastenkombinationen: Auslösen von Bausteinen über globale Hotkeys.
+```powershell
+$dotnet="$env:USERPROFILE\\.dotnet\\dotnet.exe"
+& $dotnet build Texty.slnx -m:1
+& $dotnet test Texty.Tests\\Texty.Tests.csproj -m:1
+```
 
-Reguläre Ausdrücke (RegEx): Komplexe Textmustererkennung als Trigger.
+App starten:
 
-Zwischenablage: Bausteine können basierend auf dem Inhalt der Zwischenablage getriggert werden.
+```powershell
+$dotnet="$env:USERPROFILE\\.dotnet\\dotnet.exe"
+& $dotnet run --project Texty.App\\Texty.App.csproj
+```
 
-Ausgabeziel-Beschränkung: Textbausteine können so konfiguriert werden, dass sie nur in bestimmten Programmen, in Textdateien oder in E-Mails funktionieren.
+## Outlook VSTO Host (x64)
 
-3. Dynamische Formulare & Anwendereingaben
-Interaktive Formulare (WYSIWYG): Einbindung von Textfeldern, Drop-Down-Menüs, Checkboxen, Radio-Buttons und Schiebereglern in Textbausteine.
+Das produktive Outlook-Add-in liegt im Projekt `Texty.OutlookVsto` (VSTO, .NET Framework 4.8, x64).
 
-Eingabetabellen: Erfassung strukturierter Daten vor dem Einfügen des Textes.
+Build:
 
-Dynamische Datumseingabe: Kalender-Auswahl für flexible Datumsangaben im Text.
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\\build-vsto.ps1 -Configuration Debug -Platform x64
+```
 
-4. Externe Daten & Integrationen
-MS Excel & CSV: Auslesen und Einfügen von spezifischen Excel-Zellenwerten, -Spalten, -Zeilen sowie CSV-Daten.
+Signiertes ClickOnce-Publish:
 
-MS Outlook Add-In: Spezielle Integration für Outlook inklusive automatischer Geschlechtserkennung des Empfängers.
+```powershell
+$env:TEXTY_VSTO_CERT_PATH = "C:\\certs\\texty-vsto.pfx"
+$env:TEXTY_VSTO_CERT_PASSWORD = "<passwort>"
+powershell -ExecutionPolicy Bypass -File scripts\\publish-vsto.ps1 -Configuration Release -Platform x64
+```
 
-Datenbanken & Verzeichnisse: Einbindung von XML-Werten, SQL-Datenbankabfragen sowie Windows-Umgebungs- und ActiveDirectory-Variablen.
+Ohne Visual-Studio-Office-Tooling oder Zertifikat schlägt der Publish bewusst mit klarer Fehlermeldung fehl (fail-fast).
 
-Import: Unterstützung für den Import von Text-/Bild-Dateien, Outlook-E-Mails und Mac TextExpander-Daten.
+## Portable Matrix Smoke
 
-5. Künstliche Intelligenz (KI) & Übersetzung
-KI-Textbearbeitung: Generieren oder Umformulieren von Textbausteinen direkt über KI.
+Für reproduzierbare portable Smokes über alle Ziel-RIDs:
 
-Unterstützte KI-Modelle: OpenAI/ChatGPT, Anthropic, OpenRouter sowie lokal betriebene KIs wie Ollama und GPT4All.
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\\smoke-portable-matrix.ps1 -Configuration Release
+```
 
-Sprachübersetzung: Integrierte Übersetzungsfunktionen via DeepL oder OpenAI.
+Der Lauf erzeugt einen maschinenlesbaren Report unter `portable\\smoke-matrix\\portable-smoke-report.json` und liefert einen Fehlercode bei fehlgeschlagenen Builds/Smokes.
 
-6. Makrofunktionen & Programmierung
-Automatisierung: Starten von Programmen, Öffnen von Dateien, Webseiten oder dem Windows Explorer.
+## Offene Folgearbeit
 
-Logik & Stringoperationen: Wenn-Dann-Sonst-Bedingungen, Berechnungen, Teilstring-Extraktion (auch via RegEx) und Manipulation der Groß-/Kleinschreibung.
-
-Variablen: Definieren und Ausgeben von Variablen zur dynamischen Textgestaltung.
-
-Datum & Zeit: Komplexe Datums- und Zeitberechnungen (z.B. "heute in 14 Tagen").
-
-Ausgabe-Steuerung: Simulation von Tastendrucken, Positionierung des Cursors nach dem Einfügen, Ausgabe in externe Dateien oder Hinweisfenster.
-
-7. Gemeinsame Nutzung & Teamarbeit
-Cloud-/NAS-Synchronisation: Teilen von Textbausteinen via Cloud-Diensten oder lokalen Netzwerklaufwerken.
-
-SQL-Server-Unterstützung: Professionelle Datenbankanbindung (inkl. Microsoft Azure SQL) für den Unternehmenseinsatz.
-
-Rechteverwaltung: Zugriffsbeschränkungen über Azure Entra, Verwaltung von "Master Anwendern" und detaillierte Lizenzierungs- sowie Zugriffssteuerungen.
-
-8. Extrafunktionen & Produktivitätstools
-Dokumentengenerator: Erstellung kompletter Dokumente aus verschiedenen Textbaustein-Vorlagen.
-
-Gender-O-Matic: Funktion für genderspezifische Textanpassungen.
-
-Rechtschreibung: Integrierte Rechtschreibkorrektur, Rechtschreibprüfung, automatische Großschreibung am Satzanfang und Korrektur von doppelten Großbuchstaben am Wortanfang.
-
-Mehrfache Zwischenablage: Erweiterter Zwischenablagespeicher (Clipboard Manager).
-
-Statistiken: Integrierte Zeitersparnisberechnung.
-
-Portable Nutzung: Lässt sich ohne Installation portabel (z.B. auf einem USB-Stick) betreiben.
+- SQL-Backend von in-memory auf echte SQL-Implementierung mit Migrationen (außerhalb Single-User-v1).
+- Vollstaendige Excel/AD/SQL Resolver-Backends.
+- Outlook VSTO Host-Integration.
+- Hardening fuer Rechteverwaltung, Lizenzierung und Telemetrie.

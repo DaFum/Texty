@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Texty.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Texty.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

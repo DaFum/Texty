@@ -1,0 +1,145 @@
+using Texty.Core.Models;
+using Texty.Core.Utilities;
+using Texty.Runtime.Templating;
+using Texty.Runtime.Triggering;
+
+namespace Texty.Tests;
+
+public sealed class TriggerAndTemplateTests
+{
+    [Fact]
+    public async Task TriggerEvaluator_ShouldMatchAutotextRule()
+    {
+        var evaluator = new TriggerEvaluator();
+        var rule = new TriggerRule(
+            Guid.NewGuid(),
+            TriggerType.Autotext,
+            "txsig",
+            false,
+            TriggerScope.Any,
+            null,
+            true);
+
+        var signal = new TriggerSignal(TriggerType.Autotext, "my txsig", "WINWORD.EXE", TriggerScope.Any);
+        var matches = await evaluator.EvaluateAsync([rule], signal);
+
+        Assert.Single(matches);
+        Assert.Equal(rule.Id, matches[0].Rule.Id);
+    }
+
+    [Fact]
+    public async Task TriggerEvaluator_ShouldMatchHotkeyRuleTargetProcessIgnoringExeSuffix()
+    {
+        var evaluator = new TriggerEvaluator();
+        var rule = new TriggerRule(
+            Guid.NewGuid(),
+            TriggerType.Hotkey,
+            "CTRL+SHIFT+K",
+            false,
+            TriggerScope.Any,
+            "winword",
+            true);
+
+        var signal = new TriggerSignal(TriggerType.Hotkey, "CTRL+SHIFT+K", "WINWORD.EXE", TriggerScope.Any);
+        var matches = await evaluator.EvaluateAsync([rule], signal);
+
+        Assert.Single(matches);
+        Assert.Equal(rule.Id, matches[0].Rule.Id);
+    }
+
+    [Fact]
+    public async Task TriggerEvaluator_ShouldMatchHotkeyRule_WithLocalizedSynonymsAndOrder()
+    {
+        var evaluator = new TriggerEvaluator();
+        var rule = new TriggerRule(
+            Guid.NewGuid(),
+            TriggerType.Hotkey,
+            "Strg + Alt + y",
+            false,
+            TriggerScope.Any,
+            null,
+            true);
+
+        var signal = new TriggerSignal(TriggerType.Hotkey, "ALT+CTRL+Y", "notepad.exe", TriggerScope.Any);
+        var matches = await evaluator.EvaluateAsync([rule], signal);
+
+        Assert.Single(matches);
+        Assert.Equal(rule.Id, matches[0].Rule.Id);
+    }
+
+    [Theory]
+    [InlineData("Strg + Alt + y", "CTRL+ALT+Y")]
+    [InlineData("alt+ctrl+f12", "CTRL+ALT+F12")]
+    [InlineData("  SHIFT + win + a ", "SHIFT+WIN+A")]
+    public void HotkeyComboNormalizer_ShouldCanonicalize(string raw, string expected)
+    {
+        var normalized = HotkeyComboNormalizer.Normalize(raw);
+        Assert.Equal(expected, normalized);
+    }
+
+    [Fact]
+    public async Task TemplateRenderer_ShouldReplacePlaceholders()
+    {
+        var renderer = new TemplateRenderer();
+        var now = DateTimeOffset.UtcNow;
+        var snippet = new Snippet(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Welcome",
+            "txwelcome",
+            "Hello {{name}}",
+            "<p>Hello {{name}}</p>",
+            [],
+            [],
+            [],
+            new SnippetTemplate("<p>Hello {{name}}</p>", [new TemplateField("name", "Name", FormFieldType.Text, true, null, null, null, null, null)]),
+            SnippetHighlightMode.None,
+            null,
+            false,
+            now,
+            now,
+            "test");
+
+        var rendered = await renderer.RenderAsync(
+            snippet,
+            new RenderContext(new Dictionary<string, object?> { ["name"] = "Alex" }));
+
+        Assert.Equal("Hello Alex", rendered.PlainText);
+        Assert.Contains("Alex", rendered.HtmlText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TemplateRenderer_ShouldSupportStructuredTemplateValue()
+    {
+        var renderer = new TemplateRenderer();
+        var now = DateTimeOffset.UtcNow;
+        var snippet = new Snippet(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Table",
+            "txtable",
+            "Rows:\n{{table}}",
+            "<p>Rows:</p>{{table}}",
+            [],
+            [],
+            [],
+            new SnippetTemplate("<p>Rows:</p>{{table}}", [new TemplateField("table", "Table", FormFieldType.Table, true, null, null, null, null, null)]),
+            SnippetHighlightMode.None,
+            null,
+            false,
+            now,
+            now,
+            "test");
+
+        var rendered = await renderer.RenderAsync(
+            snippet,
+            new RenderContext(new Dictionary<string, object?>
+            {
+                ["table"] = new TemplateValue("A | B", "<table><tr><td>A</td><td>B</td></tr></table>"),
+            }));
+
+        Assert.Contains("A | B", rendered.PlainText, StringComparison.Ordinal);
+        Assert.Contains("<table>", rendered.HtmlText, StringComparison.Ordinal);
+        Assert.DoesNotContain("&lt;table&gt;", rendered.HtmlText, StringComparison.Ordinal);
+    }
+}

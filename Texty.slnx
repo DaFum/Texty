@@ -1,0 +1,11 @@
+<Solution>
+  <Project Path="Texty.AI/Texty.AI.csproj" />
+  <Project Path="Texty.App/Texty.App.csproj" />
+  <Project Path="Texty.Core/Texty.Core.csproj" />
+  <Project Path="Texty.Integrations/Texty.Integrations.csproj" />
+  <Project Path="Texty.OutlookAddin/Texty.OutlookAddin.csproj" />
+  <Project Path="Texty.Runtime/Texty.Runtime.csproj" />
+  <Project Path="Texty.Storage.Json/Texty.Storage.Json.csproj" />
+  <Project Path="Texty.Storage.SqlServer/Texty.Storage.SqlServer.csproj" />
+  <Project Path="Texty.Tests/Texty.Tests.csproj" />
+</Solution>
